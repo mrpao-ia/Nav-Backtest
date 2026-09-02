@@ -187,6 +187,19 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
   .fx-imp-h strong{font-size:9px}.fx-news{font-size:8px}
 }
 
+tr.cb-row[hidden]{display:none}
+tr.cb-row > td{background:#FAFAFB;font-size:12.5px;border-bottom:1px dashed var(--line-soft)}
+.srcwrap{display:flex;flex-wrap:wrap;gap:6px}
+.srcchip{display:inline-flex;align-items:center;gap:6px;background:var(--card);
+  border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:11.5px;color:var(--muted)}
+.srcchip b{color:var(--text);font-size:11.5px}
+.trace{font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px}
+.trace.ref{background:#E8F6F0;color:#0F6E56}
+.trace.fifo{background:#F2F2F4;color:var(--muted-2)}
+.epi-btn.cb-btn{border-color:#CFE0EF;color:#1D5B8F}
+.epi-btn.cb-btn[aria-expanded="true"]{background:#EEF5FB;border-color:#1D5B8F}
+@media print{ tr.cb-row{display:none} .srcchip{font-size:7.5px} }
+
 .epi-btn{border:1px solid var(--line);background:var(--card);color:var(--muted);
   padding:1px 8px;border-radius:999px;font-size:11.5px;font-family:var(--sans);cursor:pointer;margin-left:6px;white-space:nowrap}
 .epi-btn:hover{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
@@ -1023,6 +1036,15 @@ function normType(v){
 const isDone = s => /complete|success|สำเร็จ/i.test(String(s||"")) && !/ไม่สำเร็จ/.test(String(s||""));
 const clean = v => { const s=String(v==null?"":v).trim(); return (s==="-"||s==="—"||s==="–")?"":s; };
 
+/* เลขอ้างอิงที่ถูก Excel แปลงเป็นรูปแบบวิทยาศาสตร์จะจับคู่ผิด ต้องเตือน */
+function refHealth(recs){
+  const refs=recs.filter(r=>r.ref && r.ref!=="-").map(r=>r.ref);
+  if(!refs.length) return null;
+  const sci=refs.filter(r=>/e\+/i.test(r)).length;
+  const lens=[...new Set(refs.map(r=>r.length))];
+  if(!sci && lens.length<=1) return null;
+  return {sci, lens, total:refs.length};
+}
 function parseStatement(text){
   const delim=detectDelim(text);
   let rows=parseDelimited(text,delim);
@@ -1483,6 +1505,15 @@ function contributions(done){
     return M.get(k);
   };
   let pool=0; const hits=[]; const cash=[]; const wds=[];
+  /* คิวเงินในกอง — แต่ละก้อนจำว่ามาจากการขายกองไหน เพื่อตามรอยแบบเข้าก่อนออกก่อน */
+  const queue=[];
+  const buys=[];        /* รายละเอียดการซื้อทุกครั้ง */
+  const refSell=new Map();   /* XWT ref -> รายการขายที่มี ref เดียวกัน */
+  const refOK = r => r && r!=="-" && !/e\+/i.test(r);
+  done.forEach(r=>{ if(r.type==="sell" && refOK(r.ref)) {
+    if(!refSell.has(r.ref)) refSell.set(r.ref,[]);
+    refSell.get(r.ref).push(r);
+  }});
   const markCash=d=>{ const l=cash[cash.length-1];
     if(l && +l.d===+d) l.bal=pool; else cash.push({d:new Date(d), bal:pool}); };
   /* รวมรายการฝาก/ถอนเพิ่มเติมเข้าไปในลำดับเวลาเดียวกัน */
@@ -1510,13 +1541,43 @@ function contributions(done){
       return;
     }
     const r=item.r;
-    if(r.type==="sell"){ pool+=r.amount; markCash(r.date); return; }
+    if(r.type==="sell"){
+      pool+=r.amount;
+      queue.push({from:r.fund, left:r.amount, date:r.date, ref:r.ref||""});
+      markCash(r.date); return;
+    }
     const o=mk(r.date);
     o.bought+=r.amount;
     const used=pool>0 ? Math.min(pool,r.amount) : 0;   /* กองเงินสดติดลบไม่ถือเป็นเงินที่ใช้ซื้อได้ */
     o.fromPool+=used; pool-=used;
     const need=r.amount-used;
     markCash(r.date);
+
+    /* ---- ตามรอยว่าเงินที่ใช้ซื้อมาจากไหน ---- */
+    const src=[];
+    let remain=used;
+    /* ชั้นที่ 1 — จับคู่ด้วย XWT ref ถ้าตรงกันถือว่าแม่นยำ */
+    if(remain>0.005 && refOK(r.ref) && refSell.has(r.ref)){
+      refSell.get(r.ref).forEach(sr=>{
+        if(remain<=0.005) return;
+        const lot=queue.find(q=>q.ref===r.ref && q.from===sr.fund && q.left>0.005);
+        if(!lot) return;
+        const take=Math.min(lot.left, remain);
+        lot.left-=take; remain-=take;
+        src.push({from:sr.fund, amount:take, how:"ref", date:sr.date});
+      });
+    }
+    /* ชั้นที่ 2 — เข้าก่อนออกก่อน สำหรับส่วนที่เหลือ */
+    while(remain>0.005 && queue.length){
+      const lot=queue[0];
+      if(lot.left<=0.005){ queue.shift(); continue; }
+      const take=Math.min(lot.left, remain);
+      lot.left-=take; remain-=take;
+      src.push({from:lot.from, amount:take, how:"fifo", date:lot.date});
+      if(lot.left<=0.005) queue.shift();
+    }
+    buys.push({date:r.date, fund:r.fund, amount:r.amount, fromPool:used, newMoney:need, src, ref:r.ref||""});
+    if(need>0.005) o.newFunds=(o.newFunds||new Set()).add(r.fund);
     if(need>0.005){
       hits.push({date:r.date, amount:need});
       o.newMoney+=need;
@@ -1541,7 +1602,10 @@ function contributions(done){
     rows.push({date:null, amount:small, label:"ส่วนที่ซื้อเกินเงินที่ขายได้",
       span: y1===y2 ? `ปี ${y1}` : `ปี ${y1}–${y2}`, major:false});
   }
-  return {rows, total, hits, cash, wds};
+  const grossBuy=done.filter(r=>r.type==="buy").reduce((x,r)=>x+r.amount,0);
+  const fromPoolAll=buys.reduce((x,b)=>x+b.fromPool,0);
+  return {rows, total, hits, cash, wds, buys, grossBuy, fromPool:fromPoolAll,
+          idle: pool>0.005 ? pool : 0};
 }
 function contribNote(r){
   if(!r.major) return `ส่วนต่างซื้อ-ขายที่ตัดข้ามงวด (${r.span})`;
@@ -2698,16 +2762,86 @@ function withdrawRows(a){
     <p class="foot" style="margin-top:12px">เงินถอนถูกหักออกจากกองเงินสดในพอร์ตและหักออกจากเงินลงทุนสุทธิแล้ว · มีผลกับ TWR, XIRR และกราฟมูลค่าพอร์ตด้วย</p></div>`;
 }
 function cardContribs(a){
-  const c=card("เงินลงทุนที่ใส่เข้าจากภายนอก","เงินใหม่ที่ใส่เข้าพอร์ตจริง ไม่นับเงินที่ได้จากการขายแล้วนำไปซื้อกองอื่นต่อ");
-  const cols=[{t:"วันที่",a:"c"},{t:"รายการ",a:"l"},{t:"จำนวนเงิน (บาท)"},{t:"หมายเหตุ",a:"l"}];
-  const rows=a.contribs.rows.map(r=>[
-    {t:r.date?r.date.toLocaleDateString("en-GB"):"—",cls:"num"},
-    {html:`<strong>${esc(r.label)}</strong>`},
-    {t:fmt(r.amount),cls:"num"},
-    {t:contribNote(r)}
-  ]);
-  const foot=[{t:""},{t:"รวมเงินใหม่ที่ใส่เข้าพอร์ต"},{t:fmt(a.contribs.total),cls:"num"},{t:""}];
-  c.appendChild(tableFrom(cols,rows,foot,a.contribs.rows.length>14));
+  const C=a.contribs;
+  const c=card("เงินลงทุนที่ใส่เข้าจากภายนอก",
+    "แยกว่าเงินที่ใช้ซื้อกองมาจากไหน — เงินใหม่ที่ลูกค้าโอนเข้า หรือเงินที่ได้จากการขายกองเดิม");
+
+  /* ---- แถบสรุปสามก้อน ---- */
+  const g=el("div","kpis"); g.style.marginBottom="18px";
+  g.appendChild(kpi("ยอดซื้อทั้งหมด", fmt(C.grossBuy),
+    `${fmt0((a.done||[]).filter(r=>r.type==="buy").length)} รายการซื้อ`));
+  g.appendChild(kpi("จากเงินขายกองเดิม", fmt(C.fromPool),
+    C.grossBuy>0 ? `${pct(C.fromPool/C.grossBuy)} ของยอดซื้อ · เงินหมุนในพอร์ต` : ""));
+  const hero=el("div","kpi hero");
+  hero.innerHTML=`<div class="k">เงินใหม่ที่ลูกค้าใส่เข้ามา</div><div class="v">${fmt(C.total)}</div>
+    <div class="s">${C.grossBuy>0?pct(C.total/C.grossBuy)+" ของยอดซื้อ":""}${C.idle>0.5?` · เงินสดรอลงทุน ${fmt0(C.idle)}`:""}</div>`;
+  g.appendChild(hero);
+  c.appendChild(g);
+
+  /* ---- ตารางรายเดือน กางดูรายกองได้ ---- */
+  const byMonth=new Map();
+  (C.buys||[]).forEach(b=>{
+    const k=b.date.getFullYear()*12+b.date.getMonth();
+    if(!byMonth.has(k)) byMonth.set(k,{k, date:b.date, bought:0, fromPool:0, newMoney:0, items:[]});
+    const o=byMonth.get(k);
+    o.bought+=b.amount; o.fromPool+=b.fromPool; o.newMoney+=b.newMoney;
+    if(b.date<o.date) o.date=b.date;
+    o.items.push(b);
+  });
+  const months=[...byMonth.values()].sort((x,y)=>x.k-y.k);
+
+  const wrap=el("div", months.length>10 ? "wrap tall" : "wrap");
+  const t=el("table"); t.id="cbTable"; t.style.minWidth="820px";
+  t.innerHTML=`<thead><tr>
+      <th class="l">เดือน</th><th>ยอดซื้อ</th><th>จากเงินขายกองเดิม</th><th>เงินใหม่</th>
+      <th class="c">กองที่ซื้อ</th><th class="c"></th>
+    </tr></thead><tbody></tbody>
+    <tfoot><tr><td class="l">รวม</td>
+      <td class="num">${fmt(C.grossBuy)}</td>
+      <td class="num">${fmt(C.fromPool)}</td>
+      <td class="num gain">${fmt(C.total)}</td>
+      <td></td><td></td></tr></tfoot>`;
+  const tb=t.querySelector("tbody");
+
+  const howPill = h => h==="ref"
+    ? `<span class="trace ref" title="จับคู่ด้วยเลขอ้างอิง XWT ในรายการ — เป็นการจับคู่จริงจากข้อมูลต้นทาง">จับคู่จริง</span>`
+    : `<span class="trace fifo" title="อนุมานแบบเข้าก่อนออกก่อน ไม่ใช่การจับคู่จริง">ตามรอย</span>`;
+
+  months.forEach((m,i)=>{
+    const key="m"+m.k;
+    const tr=el("tr");
+    tr.innerHTML=`<td class="l"><strong>${esc(thDate(m.date).replace(/^\d+ /,""))}</strong></td>
+      <td class="num">${fmt(m.bought)}</td>
+      <td class="num">${m.fromPool>0.5?fmt(m.fromPool):"–"}</td>
+      <td class="num ${m.newMoney>0.5?"gain":""}">${m.newMoney>0.5?fmt(m.newMoney):"–"}</td>
+      <td class="c">${fmt0(new Set(m.items.map(x=>x.fund)).size)} กอง</td>
+      <td class="c"><button class="epi-btn cb-btn no-print" type="button" data-k="${key}" aria-expanded="false">${fmt0(m.items.length)} รายการ ▾</button></td>`;
+    tb.appendChild(tr);
+    m.items.forEach(b=>{
+      const sub=el("tr","cb-row"); sub.dataset.k=key; sub.hidden=true;
+      const srcHtml = b.src.length
+        ? b.src.map(x=>`<span class="srcchip">${howPill(x.how)} ${esc(x.from)} <b class="num">${fmt0(x.amount)}</b></span>`).join("")
+        : `<span class="xdim">เงินใหม่ทั้งจำนวน</span>`;
+      sub.innerHTML=`<td class="l" style="padding-left:26px;color:var(--muted)">
+          ${thDate(b.date)} · ซื้อ <strong>${esc(b.fund)}</strong></td>
+        <td class="num">${fmt(b.amount)}</td>
+        <td class="num">${b.fromPool>0.5?fmt(b.fromPool):"–"}</td>
+        <td class="num ${b.newMoney>0.5?"gain":""}">${b.newMoney>0.5?fmt(b.newMoney):"–"}</td>
+        <td class="l" colspan="2"><div class="srcwrap">${srcHtml}</div></td>`;
+      tb.appendChild(sub);
+    });
+  });
+  wrap.appendChild(t);
+  c.appendChild(wrap);
+  wrap.querySelectorAll(".cb-btn").forEach(bt=>bt.addEventListener("click",()=>{
+    const open=bt.getAttribute("aria-expanded")==="true";
+    bt.setAttribute("aria-expanded", open?"false":"true");
+    bt.textContent=bt.textContent.replace(open?"▴":"▾", open?"▾":"▴");
+    wrap.querySelectorAll(`tr.cb-row[data-k="${bt.dataset.k}"]`).forEach(r=>r.hidden=open);
+  }));
+
+  const nRef=(C.buys||[]).reduce((n,b)=>n+b.src.filter(x=>x.how==="ref").length,0);
+  const nFifo=(C.buys||[]).reduce((n,b)=>n+b.src.filter(x=>x.how==="fifo").length,0);
 
   const box=el("div"); box.style.cssText="margin-top:22px;max-width:520px";
   box.innerHTML=`
@@ -2716,7 +2850,12 @@ function cardContribs(a){
     <div class="sum-row total"><span>คิดเป็น</span><b class="num" id="cPct">–</b></div>
     <div class="sum-row sub"><span>เทียบเท่าผลตอบแทนต่อปี (XIRR)</span><b class="num" id="xirrV">–</b></div>`;
   c.appendChild(box);
-  c.appendChild(el("p","foot","คำนวณโดยไล่กระแสเงินสดตามลำดับเวลา เงินที่ได้จากการขายจะถูกนำไปซื้อกองใหม่ก่อน ส่วนที่ขาดจึงถือเป็นเงินใหม่ที่ใส่เข้ามา")).style.marginTop="16px";
+
+  c.appendChild(el("p","foot",
+    `ยอดซื้อทั้งหมด = จากเงินขายกองเดิม + เงินใหม่ · เงินใหม่ที่ใส่เข้ามาคือฐานของ “เงินลงทุนสุทธิ” ในการ์ดสรุปภาพรวม`
+    + ` · การตามรอยที่มาของเงินใช้เลขอ้างอิง XWT ก่อน (จับคู่จริง ${fmt0(nRef)} ครั้ง)`
+    + ` ที่เหลืออนุมานแบบเข้าก่อนออกก่อน (${fmt0(nFifo)} ครั้ง) ซึ่งอาจไม่ตรงกับเจตนาจริงของลูกค้า`
+    + ` · รายการสับเปลี่ยนไม่นับในตารางนี้เพราะเงินไม่ได้ผ่านกองเงินสด`)).style.marginTop="16px";
   return c;
 }
 
@@ -3284,6 +3423,16 @@ function run(text,label){
     const recs=parseStatement(text);
     lastText=text;
     render(analyse(recs));
+    const rh=refHealth(recs);
+    if(rh) setTimeout(()=>{
+      const box=$("#pane3");
+      if(box) box.insertAdjacentHTML("afterbegin",
+        `<div class="msg" style="margin-bottom:16px"><strong>เลขอ้างอิง XWT เสียหาย</strong> —
+         ${rh.sci?`พบ ${fmt0(rh.sci)} รายการที่ถูกแปลงเป็นรูปแบบวิทยาศาสตร์ (เช่น 1.82E+15) `:""}
+         ${rh.lens.length>1?`ความยาวไม่สม่ำเสมอ (${rh.lens.join(", ")} หลัก) `:""}
+         การตามรอยที่มาของเงินจะใช้วิธีอนุมานแทนการจับคู่จริง<br>
+         แก้โดยตั้งคอลัมน์ XWT ref เป็นข้อความก่อนคัดลอก หรือคัดลอกจาก Google Sheets โดยตรงแทนการบันทึกเป็น CSV</div>`);
+    },0);
     if((($("#navGid")||{}).value||"").trim()) pullNavSheet(null,true);
     showErr(`อ่านได้ ${fmt0(recs.length)} รายการ${label?" จาก "+label:""} — สำเร็จ ${fmt0(A.done.length)} รายการ · เปิดแท็บที่ 2 เพื่อดูรายงาน`,true);
     showTab(1);
@@ -5716,7 +5865,9 @@ const DISC_GROUPS=[
   "ระบบถือว่า<strong>เงินที่ขายได้ยังอยู่ในพอร์ตเสมอ</strong> ถ้าลูกค้าถอนเงินออกไปใช้จริงโดยไม่ได้บันทึก มูลค่าพอร์ตจะสูงกว่าความจริง และ XIRR จะต่ำกว่าความจริง",
   "รายการสับเปลี่ยนถือเป็นการโยกเงินภายในพอร์ต ไม่นับเป็นเงินเข้าหรือออก",
   "รายการที่ไม่สำเร็จหรือยังไม่ได้รับการยืนยันจะถูกตัดออกจากการคำนวณทั้งหมด",
-  "เงินลงทุนสุทธิ = ซื้อสะสม − ขายสะสม + เงินสดที่ยังไม่ได้ลงทุนต่อ ตัวเลขนี้ต่างจาก “เงินที่ลงในกองทุน” ในกราฟซึ่งไม่รวมเงินสด"]],
+  "เงินลงทุนสุทธิ = ซื้อสะสม − ขายสะสม + เงินสดที่ยังไม่ได้ลงทุนต่อ ตัวเลขนี้ต่างจาก “เงินที่ลงในกองทุน” ในกราฟซึ่งไม่รวมเงินสด",
+  "การตามรอยที่มาของเงินในแท็บที่ 3 ใช้เลขอ้างอิง XWT จับคู่ก่อน ซึ่งเป็นการจับคู่จริงจาก statement · ส่วนที่ไม่มีเลขอ้างอิงใช้วิธีอนุมานแบบเข้าก่อนออกก่อน ซึ่งอาจไม่ตรงกับเจตนาจริงของลูกค้า ระบบติดป้ายแยกให้เห็นทั้งสองแบบ",
+  "ถ้าเปิด statement ด้วย Excel แล้วบันทึกเป็น CSV เลขอ้างอิง XWT อาจถูกแปลงเป็นรูปแบบวิทยาศาสตร์จนจับคู่ผิด ระบบจะขึ้นเตือนและถอยไปใช้วิธีอนุมานแทน"]],
 
  ["กำไรขาดทุนรายก้อน",[
   "กำไรของแต่ละก้อนคำนวณแบบเข้าก่อนออกก่อน (FIFO) จากต้นทุนของก้อนนั้นเอง ขณะที่ บลจ. ใช้ต้นทุนเฉลี่ยของทั้งกอง ตัวเลขรายรายการจึงไม่ตรงกับหน้า statement",
