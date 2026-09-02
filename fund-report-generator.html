@@ -2013,9 +2013,28 @@ function cardValueChart(a){
   return c;
 }
 /* กองที่ชุด NAV เริ่มหลังวันที่ซื้อ — มูลค่าช่วงต้นเป็นค่าประมาณ */
+function navSyncBox(){
+  const S=NAVSYNC;
+  if(S.state==="ok"){
+    const old = S.at ? Math.round((Date.now()-S.at)/86400000) : null;
+    const stale = old!=null && old>4;
+    return `<div class="msg ${stale?"":"ok"}" style="margin:0 0 14px">
+      ${stale?"<strong>NAV ล่าสุดค้างมาหลายวัน</strong> — ":""}ต่อยอด NAV จากชีตแล้ว
+      ${fmt0(S.funds)} กอง${S.at?` · ข้อมูลถึง ${thDate(S.at)}${old!=null?` (${old===0?"วันนี้":fmt0(old)+" วันก่อน"})`:""}`:""}
+      ${S.miss?` · ไม่พบในชีต ${fmt0(S.miss)} กอง`:""}
+      ${stale?"<br>ตรวจว่างานซิงก์รายวันใน Apps Script ยังทำงานอยู่":""}</div>`;
+  }
+  if(S.state==="loading") return `<div class="msg ok" style="margin:0 0 14px">${esc(S.msg)}</div>`;
+  if(S.state==="idle") return "";
+  return `<div class="msg" style="margin:0 0 14px">
+    <strong>ต่อยอด NAV ล่าสุดไม่สำเร็จ</strong> — ผลตอบแทนจะคำนวณจากข้อมูลถึงวันที่ฝังในไฟล์เท่านั้น
+    ${S.msg?`<br>${esc(S.msg)}`:""}
+    <br>ลองกดปุ่ม “ดึง NAV ล่าสุดจากชีต” ในตั้งค่าขั้นสูง หรือแจ้งผู้ดูแลระบบ</div>`;
+}
 function renderNavCover(){
   const box=$("#navCover"); if(!box||!A) return;
   if(!NAVH.map){ box.innerHTML=""; return; }
+  const sync=navSyncBox();
   const bad=[];
   A.funds.forEach((f,name)=>{
     const o=NAVH.map.get(fundKey(name));
@@ -2025,9 +2044,9 @@ function renderNavCover(){
       if(days>7) bad.push({name, from:o.pts[0].d, days});
     }
   });
-  if(!bad.length){ box.innerHTML=""; return; }
+  if(!bad.length){ box.innerHTML=sync; return; }
   const miss=bad.filter(b=>b.miss), late=bad.filter(b=>!b.miss).sort((a,b)=>b.days-a.days);
-  box.innerHTML=`<div class="msg" style="margin:0 0 14px">
+  box.innerHTML=sync+`<div class="msg" style="margin:0 0 14px">
     <strong>ชุด NAV ไม่ครอบคลุมช่วงที่ถือครบทุกกอง</strong> — มูลค่าพอร์ตช่วงต้นจึงเป็นค่าประมาณ และผลตอบแทนย้อนหลังยาว ๆ อาจต่ำหรือสูงกว่าความจริง
     ${late.length?`<div style="margin-top:6px">${late.slice(0,6).map(b=>`${esc(b.name)} — NAV เริ่ม ${thDate(b.from)} ช้ากว่าที่ซื้อ ${fmt0(b.days)} วัน`).join("<br>")}${late.length>6?`<br>และอีก ${fmt0(late.length-6)} กอง`:""}</div>`:""}
     ${miss.length?`<div style="margin-top:6px">ไม่มี NAV เลย: ${miss.slice(0,6).map(b=>esc(b.name)).join(", ")}${miss.length>6?` และอีก ${fmt0(miss.length-6)} กอง`:""}</div>`:""}
@@ -2472,7 +2491,7 @@ function renderBench(endValue){
       fav.map(([n,lab])=>`<button type="button" class="bmq" data-n="${esc(n)}" title="${esc(n)}">${esc(lab)}</button>`).join("");
     $$("#bmQuick .bmq").forEach(b=>b.addEventListener("click",()=>{
       sel.value=b.dataset.n; sel.dataset.keep=b.dataset.n; markQuick(); recomputeHoldings();
-      if((($("#navGid")||{}).value||"").trim()) pullNavSheet([b.dataset.n],true);
+      if(cfgVal("navGid",SHEET_DEF.navGid)) pullNavSheet([b.dataset.n],true);
     }));
     /* datalist จะกรองตามข้อความในช่อง ทำให้พอมีค่าอยู่แล้วจะเห็นแค่รายการเดียว
        จึงล้างช่องตอนโฟกัสเพื่อให้เห็นรายชื่อทั้งหมด แล้วคืนค่าเดิมถ้าไม่ได้เลือกอะไร */
@@ -2490,7 +2509,7 @@ function renderBench(endValue){
         toast("ไม่พบกอง “"+sel.value+"” ในชุด NAV"); sel.value=sel.dataset.keep||""; markQuick(); return;
       }
       sel.dataset.keep=sel.value; markQuick(); recomputeHoldings();
-      if((($("#navGid")||{}).value||"").trim()) pullNavSheet([sel.value],true);
+      if(cfgVal("navGid",SHEET_DEF.navGid)) pullNavSheet([sel.value],true);
     });
     $("#bmClear").addEventListener("click",()=>{ sel.dataset.keep=sel.value; sel.value=""; sel.focus(); });
     const ps=$("#bmPreset");
@@ -3433,7 +3452,7 @@ function run(text,label){
          การตามรอยที่มาของเงินจะใช้วิธีอนุมานแทนการจับคู่จริง<br>
          แก้โดยตั้งคอลัมน์ XWT ref เป็นข้อความก่อนคัดลอก หรือคัดลอกจาก Google Sheets โดยตรงแทนการบันทึกเป็น CSV</div>`);
     },0);
-    if((($("#navGid")||{}).value||"").trim()) pullNavSheet(null,true);
+    if(cfgVal("navGid",SHEET_DEF.navGid)) pullNavSheet(null,true);
     showErr(`อ่านได้ ${fmt0(recs.length)} รายการ${label?" จาก "+label:""} — สำเร็จ ${fmt0(A.done.length)} รายการ · เปิดแท็บที่ 2 เพื่อดูรายงาน`,true);
     showTab(1);
   }catch(e){
@@ -3559,7 +3578,7 @@ function runPortfolio(text,label){
       /* ยังไม่มีรายการย้อนหลัง — สร้างรายงานจากข้อมูลพอร์ตอย่างเดียวไปก่อน */
       const a=analysePortfolioOnly();
       lastText=""; render(a);
-      if((($("#navGid")||{}).value||"").trim()) pullNavSheet(null,true);
+      if(cfgVal("navGid",SHEET_DEF.navGid)) pullNavSheet(null,true);
       showPErr(head+" — แสดงแท็บที่ 4, 6, 7 และ 8 ให้แล้ว · เพิ่มรายการย้อนหลังภายหลังเพื่อดูผลตอบแทนย้อนหลังและกระแสเงินลงทุน",true);
     }
   }catch(e){
@@ -4576,6 +4595,13 @@ async function loadModelSeries(colName){
    (ข) เปิดไฟล์เอง               → ดึงตรงจาก Google Sheets ด้วย gviz เหมือนเดิม
    ============================================================ */
 const HAS_API = (typeof google!=="undefined") && google.script && google.script.run;
+/* อ่านค่าตั้งค่า — ผู้ใช้ทั่วไปไม่มีการ์ดตั้งค่า จึงต้องถอยไปใช้ค่าตั้งต้นเสมอ
+   ถ้าลืมจุดใดจุดหนึ่ง คนที่ไม่ใช่ผู้ดูแลจะไม่ได้ข้อมูลส่วนนั้นเลยโดยไม่มีอาการเตือน */
+function cfgVal(id, def){
+  const n=$("#"+id);
+  const v=n ? String(n.value||"").trim() : "";
+  return v || String(def!=null ? def : (SHEET_DEF[id]||"")).trim();
+}
 let IS_ADMIN=false, API_INFO=null;
 function api(fn, ...args){
   return new Promise((resolve,reject)=>{
@@ -4905,8 +4931,7 @@ function cardSheetLink(){
   return c;
 }
 async function pullSheet(which){
-  const cfg=(id,def)=>{ const n=$("#"+id); return (n? n.value : (SHEET_DEF[id]||def||"")).trim(); };
-  const url=cfg("sheetUrl",SHEET_DEF.url), fdGid=cfg("fdGid",SHEET_DEF.fdGid), vwGid=cfg("vwGid",SHEET_DEF.vwGid);
+  const url=cfgVal("sheetUrl",SHEET_DEF.url), fdGid=cfgVal("fdGid",SHEET_DEF.fdGid), vwGid=cfgVal("vwGid",SHEET_DEF.vwGid);
   const box=$("#sheetMsg");
   const say=(t,ok)=>{ if(!box) return; box.innerHTML=""; box.appendChild(el("div","msg"+(ok?" ok":""),t)); };
   if(!url){ say("ยังไม่ได้ใส่ลิงก์ชีต"); return; }
@@ -4927,7 +4952,7 @@ async function pullSheet(which){
         ["newsTab", applyFundView, n=>`ข่าวรายกอง ${fmt0(n)} กอง`]
       ];
       for(const [key,fn,lab] of tabs){
-        const nm=(($("#"+key)||{}).value||SHEET_DEF[key]||"").trim();
+        const nm=cfgVal(key, SHEET_DEF[key]);
         if(!nm) continue;
         try{ done.push(lab(fn(await loadGvizSheet(url,nm)))); }
         catch(e){ done.push(`${nm}: ${e.message||e}`); }
@@ -4939,7 +4964,7 @@ async function pullSheet(which){
 }
 
 /* ---------- ซิงก์ NAV ล่าสุดจากชีต (แท็บ nav_packed ที่ Apps Script เขียนไว้) ---------- */
-let NAVSHEET_AT="", NAVSHEET_N=0;
+let NAVSHEET_AT="", NAVSHEET_N=0, NAVSYNC={state:"idle", msg:"", at:null, funds:0, miss:0};
 function navWantList(){
   const want=new Set();
   if(A) A.funds.forEach((_,n)=>want.add(n));
@@ -4984,14 +5009,19 @@ async function navSheetIndex(url,gid,force){
   return idx;
 }
 async function pullNavSheet(names, quiet){
-  const url=($("#sheetUrl")||{}).value||SHEET_DEF.url;
-  const gid=(($("#navGid")||{}).value||"").trim();
+  const url=cfgVal("sheetUrl",SHEET_DEF.url);
+  const gid=cfgVal("navGid",SHEET_DEF.navGid);
   const box=$("#sheetMsg");
   const say=(t,ok)=>{ if(box && !quiet){ box.innerHTML=""; box.appendChild(el("div","msg"+(ok?" ok":""),t)); } };
-  if(!gid){ say("ยังไม่ได้ใส่ gid ของแท็บ nav_packed — รัน setup ใน Apps Script แล้วนำ gid มาใส่",false); return 0; }
+  if(!gid){
+    NAVSYNC={state:"off", msg:"ยังไม่ได้ตั้ง gid ของแท็บ nav_packed", at:null, funds:0, miss:0};
+    say("ยังไม่ได้ใส่ gid ของแท็บ nav_packed — รัน setup ใน Apps Script แล้วนำ gid มาใส่",false);
+    renderNavCover(); return 0;
+  }
   const want=(names&&names.length)?names:navWantList();
   if(!want.length) return 0;
   try{
+    NAVSYNC={state:"loading", msg:"กำลังดึง NAV ล่าสุด …", at:null, funds:0, miss:0}; renderNavCover();
     say("กำลังดึง NAV ล่าสุดจากชีต …",true);
     const idx=await navSheetIndex(url,gid,!!names);
     /* จับคู่ชื่อที่ต้องการกับชื่อจริงในชีต */
@@ -5029,15 +5059,23 @@ async function pullNavSheet(names, quiet){
     NAVSHEET_AT=new Date().toLocaleString("th-TH"); NAVSHEET_N=got;
     if(funds){
       NAVH={map:STORE, count:STORE.meta.points+got, text:NAVH.text||""};
+      NAVSYNC={state:"ok", msg:"", at:hi, funds, miss:missing.length};
       const miss = missing.length ? ` · ไม่พบในชีต ${fmt0(missing.length)} กอง (${esc(missing.slice(0,3).join(", "))}${missing.length>3?" …":""})` : "";
       say(`ซิงก์ NAV จากชีตแล้ว ${fmt0(funds)} กอง · ${fmt0(got)} จุด${hi?` · NAV ล่าสุด ${thDate(hi)}`:""}${miss} · ${NAVSHEET_AT}`,true);
       navStatus("ซิงก์จากชีตเรียบร้อย",true);
       if(A){ DAILY=null; render(A); }
     } else {
+      NAVSYNC={state:"empty", msg:"แท็บ nav_packed ไม่มีข้อมูลของกองที่ใช้อยู่", at:null, funds:0, miss:missing.length};
       say("แท็บ nav_packed ไม่มีข้อมูลของกองที่ใช้อยู่",false);
     }
+    renderNavCover();
     return funds;
-  }catch(e){ say("ดึง NAV จากชีตไม่สำเร็จ: "+(e.message||e),false); return 0; }
+  }catch(e){
+    NAVSYNC={state:"fail", msg:(e.message||String(e)), at:null, funds:0, miss:0};
+    say("ดึง NAV จากชีตไม่สำเร็จ: "+(e.message||e),false);
+    renderNavCover();
+    return 0;
+  }
 }
 
 /* ค้นชื่อกองแบบไม่สนขีดกลาง ช่องว่าง ตัวพิมพ์ — ขึ้นต้นตรงมาก่อน แล้วค่อยแบบมีคำนั้นอยู่ */
