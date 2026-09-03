@@ -2878,24 +2878,6 @@ function cardContribs(a){
       `${fmt0(C.promos.length)} รายการ · ไม่ได้จ่ายเงิน ไม่นับเป็นเงินลงทุน`));
   c.appendChild(g);
 
-  /* ---- รายละเอียดของแถม ---- */
-  if(C.promos.length){
-    const pw=el("div"); pw.style.marginBottom="18px";
-    pw.innerHTML=`<div class="eyebrow">หน่วยที่ได้รับโดยไม่ได้จ่ายเงิน</div>
-      <div class="wrap"><table><thead><tr>
-        <th class="l">วันที่</th><th class="l">กองทุน</th><th>มูลค่า ณ วันที่ได้รับ</th><th>หน่วย</th><th class="l">ที่มา</th>
-      </tr></thead><tbody>${C.promos.map(r=>`<tr>
-        <td class="l num" style="font-size:12.5px">${thDate(r.date)}</td>
-        <td class="l"><strong>${esc(r.fund)}</strong></td>
-        <td class="num">${fmt(r.amount)}</td>
-        <td class="num">${fmt(r.units,4)}</td>
-        <td class="l"><span class="promo">${esc(promoLabel(r))}</span></td></tr>`).join("")}</tbody>
-        <tfoot><tr><td class="l">รวม</td><td></td>
-          <td class="num">${fmt(C.promoAmt)}</td><td></td><td></td></tr></tfoot></table></div>
-      <p class="foot" style="margin-top:8px">หน่วยเหล่านี้เพิ่มมูลค่าพอร์ตโดยลูกค้าไม่ได้จ่ายเงิน จึงไม่นับเป็นเงินลงทุนและไม่หักจากเงินที่ได้จากการขายกองเดิม · ต้นทุนรายกองยังคงไว้ตามที่ บลจ. บันทึก เพื่อให้กำไรรายกองตรงกับ statement</p>`;
-    c.appendChild(pw);
-  }
-
   /* ---- ตารางรายเดือน กางดูรายกองได้ ---- */
   const byMonth=new Map();
   (C.buys||[]).forEach(b=>{
@@ -2957,6 +2939,24 @@ function cardContribs(a){
     bt.textContent=bt.textContent.replace(open?"▴":"▾", open?"▾":"▴");
     wrap.querySelectorAll(`tr.cb-row[data-k="${bt.dataset.k}"]`).forEach(r=>r.hidden=open);
   }));
+
+  /* ---- รายละเอียดของแถม ---- */
+  if(C.promos.length){
+    const pw=el("div"); pw.style.margin="26px 0 0";
+    pw.innerHTML=`<div class="eyebrow">หน่วยที่ได้รับโดยไม่ได้จ่ายเงิน</div>
+      <div class="wrap"><table><thead><tr>
+        <th class="l">วันที่</th><th class="l">กองทุน</th><th>มูลค่า ณ วันที่ได้รับ</th><th>หน่วย</th><th class="l">ที่มา</th>
+      </tr></thead><tbody>${C.promos.map(r=>`<tr>
+        <td class="l num" style="font-size:12.5px">${thDate(r.date)}</td>
+        <td class="l"><strong>${esc(r.fund)}</strong></td>
+        <td class="num">${fmt(r.amount)}</td>
+        <td class="num">${fmt(r.units,4)}</td>
+        <td class="l"><span class="promo">${esc(promoLabel(r))}</span></td></tr>`).join("")}</tbody>
+        <tfoot><tr><td class="l">รวม</td><td></td>
+          <td class="num">${fmt(C.promoAmt)}</td><td></td><td></td></tr></tfoot></table></div>
+      <p class="foot" style="margin-top:8px">หน่วยเหล่านี้เพิ่มมูลค่าพอร์ตโดยลูกค้าไม่ได้จ่ายเงิน จึงไม่นับเป็นเงินลงทุนและไม่หักจากเงินที่ได้จากการขายกองเดิม · ต้นทุนรายกองยังคงไว้ตามที่ บลจ. บันทึก เพื่อให้กำไรรายกองตรงกับ statement</p>`;
+    c.appendChild(pw);
+  }
 
   const nRef=(C.buys||[]).reduce((n,b)=>n+b.src.filter(x=>x.how==="ref").length,0);
   const nFifo=(C.buys||[]).reduce((n,b)=>n+b.src.filter(x=>x.how==="fifo").length,0);
