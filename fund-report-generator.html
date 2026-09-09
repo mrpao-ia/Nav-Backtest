@@ -191,6 +191,10 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
   .fx-imp-h strong{font-size:9px}.fx-news{font-size:8px}
 }
 
+tr.cash-row > td{background:var(--bg);border-top:1px dashed var(--line)}
+.tf-sub{font-size:11px;font-weight:400;color:var(--muted-2);margin-top:2px}
+tr.cash-row strong{color:var(--muted)}
+@media print{ tr.cash-row > td{background:#FAFAFB!important} }
 tr.cb-row[hidden]{display:none}
 tr.cb-row > td{background:#FAFAFB;font-size:12.5px;border-bottom:1px dashed var(--line-soft)}
 .srcwrap{display:flex;flex-wrap:wrap;gap:6px}
@@ -2721,7 +2725,7 @@ function weightsFromPortfolio(){
              "GOLD":"ES-GOLDBULLION-UH","EUX":"K-WORLDX","US500":"SCBS&P500",
              "ASIA":"K-ASIA","CHA":"K-ASIA","EM":"KF-EM","BOND":"K-GB-A(D)","CASH":"K-CASH-A"};
   const navs={};
-  $$("#holdTable tbody tr").forEach(tr=>{
+  $$("#holdTable tbody tr:not(.cash-row)").forEach(tr=>{
     const f=A.holdings[+tr.dataset.i];
     navs[f.name]=(parseFloat(tr.querySelector("input.nav").value)||0)*f.units;
   });
@@ -3045,7 +3049,8 @@ function cardHoldings(a){
   });
   t.appendChild(tb);
   const tf=el("tfoot");
-  tf.innerHTML=`<tr><td class="l">รวม</td><td></td><td></td><td class="num">${fmt(a.costHeld)}</td><td></td><td></td><td></td>
+  tf.innerHTML=`<tr><td class="l">รวมทั้งพอร์ต<div class="tf-sub" id="hTotNote"></div></td>
+    <td></td><td></td><td class="num">${fmt(a.costHeld)}</td><td></td><td></td><td></td>
     <td class="num" id="hTotVal">–</td><td class="num" id="hTotPl">–</td><td class="num" id="hTotPct">–</td><td class="num">100.00%</td></tr>`;
   t.appendChild(tf); wrap.appendChild(t); c.appendChild(wrap);
   if(P){
@@ -3114,7 +3119,7 @@ function sellDateText(ds){
   return sorted.length>4 ? `${txt} และอีก ${fmt0(sorted.length-4)} ครั้ง` : txt;
 }
 function navNowOf(name){
-  const tr=[...document.querySelectorAll("#holdTable tbody tr")]
+  const tr=[...document.querySelectorAll("#holdTable tbody tr:not(.cash-row)")]
     .find(r=>{ const f=A&&A.holdings[+r.dataset.i]; return f && fundKey(f.name)===fundKey(name); });
   if(tr){ const v=parseFloat(tr.querySelector("input.nav").value); if(v>0) return v; }
   if(NAVH.map){ const o=NAVH.map.get(fundKey(name)); if(o&&o.pts.length) return o.pts[o.pts.length-1].nav; }
@@ -3398,7 +3403,7 @@ function wire(){
 }
 function recomputeHoldings(){
   if(!A) return;
-  const rows=[...document.querySelectorAll("#holdTable tbody tr")];
+  const rows=[...document.querySelectorAll("#holdTable tbody tr:not(.cash-row)")];
   if(!rows.length) return;
   let totVal=0;
   const vals=rows.map(tr=>{
@@ -3413,6 +3418,7 @@ function recomputeHoldings(){
     const c=tr.querySelector(".v-pct"); c.textContent=(v&&f.cost)?pct(pl/f.cost):"–"; c.className="num v-pct "+cls(pl);
     tr.querySelector(".v-port").textContent=totVal?pct(v/totVal):"–";
   });
+
   /* เงินสดที่ขายแล้วยังไม่ได้ลงทุนต่อ ยังเป็นทรัพย์สินของพอร์ต ต้องนับรวมในมูลค่า
      ไม่งั้นมูลค่าพอร์ตกับเงินลงทุนสุทธิจะคิดคนละฐานกัน */
   const idleCash = (!A.portfolioOnly && A.cash && A.cash.length) ? cashAt(A,new Date()) : 0;
@@ -3424,6 +3430,35 @@ function recomputeHoldings(){
   if($("#hTotS")) $("#hTotS").textContent = idleCash>0.5
     ? `กองทุน ${fmt0(totInv)} + เงินสดรอลงทุน ${fmt0(idleCash)}`
     : ($("#hTotS").dataset.def||$("#hTotS").textContent);
+  if($("#hTotNote")) $("#hTotNote").textContent = idleCash>0.5
+    ? `เฉพาะกองทุน ${fmt(totInv)} · เงินสด ${fmt(idleCash)}` : "";
+
+  /* แสดงเงินสดรอลงทุนเป็นแถวของตัวเองในตาราง เพื่อให้ยอดรวมของกองตรงกับพอร์ตที่ บลจ. แสดง */
+  const tb=$("#holdTable tbody");
+  if(tb){
+    const oldRow=tb.querySelector("tr.cash-row");
+    if(oldRow) oldRow.remove();
+    if(idleCash>0.5){
+      const NC=$("#holdTable thead tr").children.length;
+      const tr=document.createElement("tr");
+      tr.className="cash-row";
+      tr.innerHTML=`<td class="l"><strong>เงินสดรอลงทุน</strong>
+          <div style="font-size:11px;color:var(--muted-2)">ขายแล้วยังไม่ได้ซื้อกองใหม่</div></td>
+        <td class="l">–</td><td class="num">–</td>
+        <td class="num">${fmt(idleCash)}</td><td class="c">–</td><td class="c">–</td><td class="c">–</td>
+        <td class="num">${fmt(idleCash)}</td>
+        <td class="num">–</td><td class="num">–</td>
+        <td class="num">${totVal?pct(idleCash/totVal):"–"}</td>`;
+      while(tr.children.length>NC) tr.removeChild(tr.lastChild);
+      tb.appendChild(tr);
+    }
+    /* %Port ของกองต้องคิดจากมูลค่ารวมทั้งพอร์ต ให้ผลรวมเป็น 100% พอดี */
+    rows.forEach((tr2,i)=>{
+      const {v}=vals[i];
+      const c=tr2.querySelector(".v-port");
+      if(c) c.textContent = totVal ? pct(v/totVal) : "–";
+    });
+  }
   const tp=$("#hTotPl"); tp.textContent=totVal?sign(unreal):"–"; tp.className="num "+cls(unreal);
   const tc=$("#hTotPct"); tc.textContent=totVal?pct(unreal/A.costHeld):"–"; tc.className="num "+cls(unreal);
   set("unrealV", totVal?sign(unreal):"–", cls(unreal));
@@ -3753,7 +3788,7 @@ $("#pOpenSheet").addEventListener("click",()=>{
 $("#saveFile").addEventListener("click",()=>{
   if(!lastText){ toast("ยังไม่มีข้อมูลให้บันทึก"); return; }
   const navs={};
-  document.querySelectorAll("#holdTable tbody tr").forEach(tr=>{
+  document.querySelectorAll("#holdTable tbody tr:not(.cash-row)").forEach(tr=>{
     navs[A.holdings[+tr.dataset.i].name]=parseFloat(tr.querySelector("input.nav").value)||0;
   });
   const blob=JSON.stringify({v:4,saved:new Date().toISOString(),meta:meta(),navs,statement:lastText,portfolio:PORT.text,navHistory:NAVH.text, extra:EXTRA.text,
@@ -3793,7 +3828,7 @@ $("#loadFile").addEventListener("change",e=>{
       $("#paste").value=o.statement;
       run(o.statement,"ไฟล์ที่บันทึกไว้");
       if(o.navs && A){
-        document.querySelectorAll("#holdTable tbody tr").forEach(tr=>{
+        document.querySelectorAll("#holdTable tbody tr:not(.cash-row)").forEach(tr=>{
           const n=o.navs[A.holdings[+tr.dataset.i].name];
           if(n) tr.querySelector("input.nav").value=(+n).toFixed(4);
         });
@@ -5564,7 +5599,7 @@ function cardRebal(a){
 }
 function rbVals(){
   const out=[];
-  $$("#holdTable tbody tr").forEach(tr=>{
+  $$("#holdTable tbody tr:not(.cash-row)").forEach(tr=>{
     const f=A.holdings[+tr.dataset.i];
     const nav=parseFloat(tr.querySelector("input.nav").value)||0;
     out.push({f, v:f.units*nav, nav});
