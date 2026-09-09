@@ -3049,9 +3049,19 @@ function cardHoldings(a){
   });
   t.appendChild(tb);
   const tf=el("tfoot");
-  tf.innerHTML=`<tr><td class="l">รวมทั้งพอร์ต<div class="tf-sub" id="hTotNote"></div></td>
-    <td></td><td></td><td class="num">${fmt(a.costHeld)}</td><td></td><td></td><td></td>
-    <td class="num" id="hTotVal">–</td><td class="num" id="hTotPl">–</td><td class="num" id="hTotPct">–</td><td class="num">100.00%</td></tr>`;
+  tf.innerHTML=`
+    <tr id="hSumFund"><td class="l">รวมกองทุน</td><td></td><td></td>
+      <td class="num">${fmt(a.costHeld)}</td><td></td><td></td><td></td>
+      <td class="num" id="hFundVal">–</td><td class="num" id="hTotPl">–</td>
+      <td class="num" id="hTotPct">–</td><td class="num" id="hFundPort">–</td></tr>
+    <tr id="hSumCash" hidden><td class="l">เงินสดรอลงทุน<div class="tf-sub">ขายแล้วยังไม่ได้ซื้อกองใหม่</div></td>
+      <td></td><td></td><td class="num" id="hCashCost">–</td><td></td><td></td><td></td>
+      <td class="num" id="hCashVal">–</td><td class="num">–</td><td class="num">–</td>
+      <td class="num" id="hCashPort">–</td></tr>
+    <tr id="hSumAll"><td class="l">มูลค่าพอร์ตรวม</td><td></td><td></td>
+      <td class="num" id="hAllCost">${fmt(a.costHeld)}</td><td></td><td></td><td></td>
+      <td class="num" id="hTotVal">–</td><td class="num" id="hAllPl">–</td>
+      <td class="num" id="hAllPct">–</td><td class="num">100.00%</td></tr>`;
   t.appendChild(tf); wrap.appendChild(t); c.appendChild(wrap);
   if(P){
     const notes=reconcile(a,P);
@@ -3430,35 +3440,40 @@ function recomputeHoldings(){
   if($("#hTotS")) $("#hTotS").textContent = idleCash>0.5
     ? `กองทุน ${fmt0(totInv)} + เงินสดรอลงทุน ${fmt0(idleCash)}`
     : ($("#hTotS").dataset.def||$("#hTotS").textContent);
-  if($("#hTotNote")) $("#hTotNote").textContent = idleCash>0.5
-    ? `เฉพาะกองทุน ${fmt(totInv)} · เงินสด ${fmt(idleCash)}` : "";
 
-  /* แสดงเงินสดรอลงทุนเป็นแถวของตัวเองในตาราง เพื่อให้ยอดรวมของกองตรงกับพอร์ตที่ บลจ. แสดง */
-  const tb=$("#holdTable tbody");
-  if(tb){
-    const oldRow=tb.querySelector("tr.cash-row");
-    if(oldRow) oldRow.remove();
-    if(idleCash>0.5){
-      const NC=$("#holdTable thead tr").children.length;
-      const tr=document.createElement("tr");
-      tr.className="cash-row";
-      tr.innerHTML=`<td class="l"><strong>เงินสดรอลงทุน</strong>
-          <div style="font-size:11px;color:var(--muted-2)">ขายแล้วยังไม่ได้ซื้อกองใหม่</div></td>
-        <td class="l">–</td><td class="num">–</td>
-        <td class="num">${fmt(idleCash)}</td><td class="c">–</td><td class="c">–</td><td class="c">–</td>
-        <td class="num">${fmt(idleCash)}</td>
-        <td class="num">–</td><td class="num">–</td>
-        <td class="num">${totVal?pct(idleCash/totVal):"–"}</td>`;
-      while(tr.children.length>NC) tr.removeChild(tr.lastChild);
-      tb.appendChild(tr);
-    }
-    /* %Port ของกองต้องคิดจากมูลค่ารวมทั้งพอร์ต ให้ผลรวมเป็น 100% พอดี */
-    rows.forEach((tr2,i)=>{
-      const {v}=vals[i];
-      const c=tr2.querySelector(".v-port");
-      if(c) c.textContent = totVal ? pct(v/totVal) : "–";
-    });
+
+  /* ท้ายตารางแยกเป็นสามชั้น: รวมกองทุน → เงินสดรอลงทุน → มูลค่าพอร์ตรวม
+     เพื่อให้ ต้นทุน + กำไร = มูลค่า ตรงกันในทุกแถว */
+  const allCost=A.costHeld+idleCash;
+  const setTxt=(id,txt,klass)=>{ const n=$("#"+id); if(!n) return;
+    n.textContent=txt; if(klass!=null) n.className="num "+klass; };
+  setTxt("hFundVal", totInv?fmt(totInv):"–");
+  setTxt("hFundPort", totVal?pct(totInv/totVal):"–");
+  const hasCash = idleCash>0.5;
+  const fundRow=$("#hSumFund");
+  if(fundRow){
+    fundRow.hidden = !hasCash;                      /* ไม่มีเงินสด สองแถวจะซ้ำกัน เหลือแถวเดียวพอ */
+    const lab=fundRow.querySelector("td.l");
+    if(lab) lab.textContent = "รวมกองทุน";
   }
+  const allLab=$("#hSumAll") && $("#hSumAll").querySelector("td.l");
+  if(allLab) allLab.textContent = hasCash ? "มูลค่าพอร์ตรวม" : "รวมทั้งพอร์ต";
+  const cashRow=$("#hSumCash");
+  if(cashRow){
+    cashRow.hidden = !hasCash;
+    setTxt("hCashCost", fmt(idleCash));
+    setTxt("hCashVal", fmt(idleCash));
+    setTxt("hCashPort", totVal?pct(idleCash/totVal):"–");
+  }
+  setTxt("hAllCost", fmt(allCost));
+  setTxt("hAllPl", totVal?sign(unreal):"–", cls(unreal));
+  setTxt("hAllPct", (totVal&&allCost>0)?pct(unreal/allCost):"–", cls(unreal));
+  /* %Port ของกองคิดจากมูลค่ารวมทั้งพอร์ต ผลรวมทุกแถวจึงเป็น 100% พอดี */
+  rows.forEach((tr2,i)=>{
+    const {v}=vals[i];
+    const c=tr2.querySelector(".v-port");
+    if(c) c.textContent = totVal ? pct(v/totVal) : "–";
+  });
   const tp=$("#hTotPl"); tp.textContent=totVal?sign(unreal):"–"; tp.className="num "+cls(unreal);
   const tc=$("#hTotPct"); tc.textContent=totVal?pct(unreal/A.costHeld):"–"; tc.className="num "+cls(unreal);
   set("unrealV", totVal?sign(unreal):"–", cls(unreal));
