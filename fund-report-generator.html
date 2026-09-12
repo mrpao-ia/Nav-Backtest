@@ -5283,17 +5283,18 @@ const dateSort = s => { const t=Date.parse(String(s||"").replace(" ","T")); retu
 
 function applyCalls(m){
   if(!m||m.length<2) throw new Error("ไม่พบข้อมูลในแท็บ Investment_Call_status");
-  let hi=m.findIndex(r=>r.some(c=>/fund_?list/i.test(String(c))));
+  let hi=m.findIndex(r=>r.some(c=>/^fund(_?list|_?code|s)?$/i.test(String(c).trim())));
   if(hi<0) hi=0;
   const h=m[hi];
   const cType=findCol(h,[/call_?type/,/type_?display/]);
-  const cList=findCol(h,[/fund_?list/]);
+  /* ชีตเคยใช้ fund_list ต่อมาเปลี่ยนเป็น fund — รับทั้งสองแบบและชื่อใกล้เคียง */
+  const cList=findCol(h,[/^fund_?list$/,/^funds?$/,/^fund_?code$/,/^short_?code$/,/fund_?list/]);
   const cOrd =findCol(h,[/order_?type/,/^order$/,/action/]);
   const cUpd =findCol(h,[/updated_?at/,/update/]);
   const cUrl =findCol(h,[/cta_?url/,/url/,/link/]);
   const cImg =findCol(h,[/author_?image/]);
   const cRate=findCol(h,[/rating/]);
-  if(cList<0) throw new Error("ไม่พบคอลัมน์ fund_list");
+  if(cList<0) throw new Error("ไม่พบคอลัมน์รายชื่อกองในแท็บ Investment Call (รองรับชื่อ fund, fund_list, fund_code, short_code)");
   const map=new Map(); let n=0;
   for(let i=hi+1;i<m.length;i++){
     const r=m[i];
