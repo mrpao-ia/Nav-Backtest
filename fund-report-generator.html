@@ -4643,6 +4643,7 @@ function recomputeHoldings(){
   renderReport();
   renderFixed();
   renderNewsSearch();
+  rbFeedRef(true);
   mountFootnotes();
   const bars=$("#allocBars");
   if(bars){
@@ -6734,6 +6735,8 @@ function rbMount(){
   f.srcdoc=src.textContent.replace(/<\\\/script>/g,"<\/script>");
   f.addEventListener("load",()=>{
     RB_READY=true;
+    rbFeedRef(false);
+    rbHookRefresh();
     rbAutoHeight();
     if(A && !rbHasRows()) rbPull(true);
   });
@@ -6754,6 +6757,44 @@ function rbAutoHeight(){
   w.addEventListener("input",()=>setTimeout(fit,120));
 }
 const rbHasRows = () => { const w=rbWin(); try{ return !!(w && w.D && w.D.length); }catch(e){ return false; } };
+/* ป้อนโมเดลพอร์ตและฐานราคาให้เครื่องมือที่ฝังไว้
+   เครื่องมือออกแบบมาให้ดึงเองผ่าน Apps Script แต่ตอนฝังในไฟล์นี้ ไฟล์หลักมีข้อมูลอยู่แล้ว
+   จึงส่งให้ตรง ๆ ผ่านฟังก์ชันเดิมที่มันใช้รับข้อมูล */
+let RBREF=null;
+function rbBuildRef(){
+  const models=[];
+  PALLOC.forEach(p=>models.push({
+    n: planShort(p.name),
+    m: p.by || "อื่น ๆ",
+    i: p.funds.map(f=>[f.code, +f.w||0]),
+    d: p.asOf || ""
+  }));
+  const funds=[];
+  const seen=new Set();
+  const push=(code,nav,dt)=>{
+    const k=fundKey(code);
+    if(!code || seen.has(k)) return;
+    seen.add(k);
+    const fm=fmapOf(code), tg=ftagOf(code);
+    funds.push({c:code, n:(tg&&tg.name)||(fm&&fm.nameTh)||"", a:(fm&&fm.amc)||"",
+                v:+nav||0, d:dt||""});
+  };
+  if(NAVH.map && NAVH.map.names) NAVH.map.names().forEach(n=>{
+    const o=NAVH.map.get(fundKey(n));
+    const last=(o&&o.pts.length)?o.pts[o.pts.length-1]:null;
+    push(n, last?last.nav:0, last?thDate(last.d):"");
+  });
+  FD.forEach(o=>push(o.code,0,""));
+  const err=[];
+  if(!models.length) err.push("ยังไม่ได้ดึงโมเดลพอร์ตจากชีต — เปิดตั้งค่าขั้นสูงในแท็บที่ 1 แล้วกดดึงข้อมูล");
+  return {models, funds, err};
+}
+function rbFeedRef(force){
+  const w=rbWin();
+  if(!w || !w.onRef) return;
+  if(!RBREF || force) RBREF=rbBuildRef();
+  try{ w.onRef(RBREF); }catch(e){}
+}
 /* แปลงพอร์ตในไฟล์หลักให้เป็นรูปแบบที่เครื่องคำนวณเข้าใจ */
 function rbRows(){
   if(!A) return [];
@@ -6775,6 +6816,16 @@ function rbRows(){
       w:0
     };
   }).filter(r=>r.units>HELD_MIN || r.value>0.5);
+}
+/* ปุ่มรีเฟรชในเครื่องมือให้ดึงข้อมูลใหม่จากไฟล์หลักแทนการเรียก Apps Script */
+function rbHookRefresh(){
+  const w=rbWin(); if(!w||!w.document) return;
+  const b=w.document.getElementById("refReload");
+  if(b && !b.dataset.hook){
+    b.dataset.hook="1";
+    b.title="ดึงโมเดลและราคาใหม่จากข้อมูลในไฟล์หลัก";
+    b.addEventListener("click",e=>{ e.stopImmediatePropagation(); rbFeedRef(true); },true);
+  }
 }
 function rbPull(quiet){
   const w=rbWin(), msg=$("#rbPullMsg");
