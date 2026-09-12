@@ -6275,6 +6275,7 @@ async function pullSheet(which){
       }
     }
     say("ดึงสำเร็จ — "+done.join(" · ")+` · ${new Date().toLocaleString("th-TH")}`,true);
+    rbFeedRef(true);          /* ต้องป้อนก่อน เพราะ render จะทำงานเฉพาะเมื่อมีพอร์ต */
     if(A) render(A);
   }catch(e){ say("ดึงไม่สำเร็จ: "+(e.message||e)); }
 }
@@ -6735,8 +6736,9 @@ function rbMount(){
   f.srcdoc=src.textContent.replace(/<\\\/script>/g,"<\/script>");
   f.addEventListener("load",()=>{
     RB_READY=true;
-    rbFeedRef(false);
+    rbFeedRef(true);
     rbHookRefresh();
+    rbWatch();
     rbAutoHeight();
     if(A && !rbHasRows()) rbPull(true);
   });
@@ -6789,11 +6791,13 @@ function rbBuildRef(){
   if(!models.length) err.push("ยังไม่ได้ดึงโมเดลพอร์ตจากชีต — เปิดตั้งค่าขั้นสูงในแท็บที่ 1 แล้วกดดึงข้อมูล");
   return {models, funds, err};
 }
+let RB_PENDING=false;
 function rbFeedRef(force){
   const w=rbWin();
-  if(!w || !w.onRef) return;
-  if(!RBREF || force) RBREF=rbBuildRef();
-  try{ w.onRef(RBREF); }catch(e){}
+  if(!w || !w.onRef){ RB_PENDING=true; return; }   /* กรอบยังโหลดไม่เสร็จ ค่อยป้อนตอน load */
+  /* ชุดเดิมที่ยังไม่มีโมเดลไม่ควรถูกจำไว้ ต้องสร้างใหม่ทุกครั้งจนกว่าจะได้ข้อมูลจริง */
+  if(!RBREF || force || !RBREF.models.length) RBREF=rbBuildRef();
+  try{ w.onRef(RBREF); RB_PENDING=false; }catch(e){ RB_PENDING=true; }
 }
 /* แปลงพอร์ตในไฟล์หลักให้เป็นรูปแบบที่เครื่องคำนวณเข้าใจ */
 function rbRows(){
@@ -6818,6 +6822,17 @@ function rbRows(){
   }).filter(r=>r.units>HELD_MIN || r.value>0.5);
 }
 /* ปุ่มรีเฟรชในเครื่องมือให้ดึงข้อมูลใหม่จากไฟล์หลักแทนการเรียก Apps Script */
+/* กันกรณีข้อมูลมาถึงหลังกรอบโหลดเสร็จ หรือกลับกัน */
+function rbWatch(){
+  let n=0;
+  const t=setInterval(()=>{
+    n++;
+    const w=rbWin();
+    const need = RB_PENDING || (w && w.REF && !(w.REF.models||[]).length && PALLOC.size);
+    if(need) rbFeedRef(true);
+    if(n>40 || (w && w.REF && (w.REF.models||[]).length)) clearInterval(t);
+  },1500);
+}
 function rbHookRefresh(){
   const w=rbWin(); if(!w||!w.document) return;
   const b=w.document.getElementById("refReload");
