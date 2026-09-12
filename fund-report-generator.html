@@ -615,6 +615,7 @@ select,option{font-family:var(--sans)}
   .xava{width:24px;height:24px}
   .dlist{font-size:8px;line-height:1.6;padding-left:14px}
   .dlist li{margin-bottom:2px}
+  #rbFrame{height:auto!important;min-height:0!important;page-break-inside:auto}
   .pagefoot{margin-top:12px;padding-top:8px;font-size:7px;line-height:1.5;color:#6B7280}
   .pf-mark{width:9px;margin-right:6px}
   .discshort{background:#FAFAFB!important;break-inside:avoid;page-break-inside:avoid}
@@ -870,6 +871,1146 @@ select,option{font-family:var(--sans)}
   <section class="panel" id="pane9" role="tabpanel" aria-labelledby="t9" hidden></section>
 </main>
 
+<script type="text/plain" id="rb7src"><!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>เครื่องคำนวณปรับสมดุลพอร์ต</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F6F7; --card:#FFFFFF; --text:#16181D; --muted:#6B7280; --muted-2:#9AA0A6;
+  --line:#E4E4E7; --line-soft:#EFEFF1; --accent:#F0B429; --accent-soft:#FDF4E0; --accent-ink:#8A6100;
+  --gain:#12805C; --loss:#C4302B; --brand-bg:#E9F32B;
+  --sans:"IBM Plex Sans Thai",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6}
+input,select,button,textarea{font-family:var(--sans)}
+input[type=number]{-moz-appearance:textfield;-webkit-appearance:none;appearance:textfield}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none!important;margin:0!important;display:none!important}
+
+.topbar{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30}
+.topin{max-width:1320px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.wordmark{font-size:19px;font-weight:700;letter-spacing:-.01em}
+.wordmark .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:5px;vertical-align:middle}
+.tagline{font-size:12.5px;color:var(--muted-2)}
+.topact{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+
+main{max-width:1320px;margin:0 auto;padding:24px 24px 70px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:18px}
+.card-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.card-head h2{font-size:16px;margin:0}
+.aside{font-size:12.5px;color:var(--muted-2)}
+.dlist{margin:0;padding-left:18px;font-size:12.5px;line-height:1.85;color:var(--muted)}
+.dlist li{margin-bottom:5px}
+@media print{ .dlist{font-size:8px;line-height:1.6} }
+.foot{font-size:12px;color:var(--muted-2);line-height:1.7;margin:0}
+.eyebrow{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted-2);margin:0 0 9px}
+.eyebrow::before{content:"—";color:var(--accent);margin-right:7px}
+
+.btn{border:1px solid var(--line);background:var(--card);color:var(--text);padding:8px 15px;border-radius:999px;
+  font-size:13px;cursor:pointer;transition:background-color .13s,border-color .13s}
+.btn:hover{border-color:#C9CACF;background:#FAFAFB}
+.btn.amber{background:var(--accent);border-color:var(--accent);color:#3A2A00;font-weight:600}
+.btn.amber:hover{background:#E6A81F}
+.btn.dark{background:var(--text);border-color:var(--text);color:#fff;font-weight:600}
+.btn.dark:hover{background:#000}
+.btn.quiet{border-color:transparent;color:var(--muted)}
+.btn.sm{padding:5px 12px;font-size:12.5px}
+.btn.tg[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.stack{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:14px}
+
+label.lab{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px}
+input.f,textarea.f,select.f{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;
+  background:var(--card);color:var(--text);font-size:13.5px}
+input.f:focus,textarea.f:focus,select.f:focus{outline:2px solid var(--accent);outline-offset:-1px}
+textarea.f{min-height:150px;resize:vertical;font-family:var(--mono);font-size:12px;line-height:1.7}
+.grid{display:grid;gap:16px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line-soft);text-align:right;vertical-align:middle}
+th{font-size:11.5px;font-weight:500;color:var(--muted);background:var(--bg);position:sticky;top:0}
+th.l,td.l{text-align:left}th.c,td.c{text-align:center}
+tfoot td{font-weight:600;border-top:2px solid var(--line);border-bottom:0;background:var(--bg)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.gain{color:var(--gain)}.loss{color:var(--loss)}
+.wrap{overflow:auto;border:1px solid var(--line-soft);border-radius:10px}
+.pill{display:inline-block;padding:3px 11px;border-radius:999px;font-size:11.5px;white-space:nowrap}
+.pill.ok{background:#E8F6F0;color:var(--gain)}
+.pill.bad{background:#FCEDEB;color:var(--loss)}
+.pill.gone{background:#F2F2F4;color:var(--muted-2)}
+
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.mb{text-align:left;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:12px 14px;cursor:pointer}
+.mb strong{display:block;font-size:13.5px;margin-bottom:4px}
+.mb small{display:block;font-size:11.5px;color:var(--muted);line-height:1.5}
+.mb:hover{border-color:#C9CACF;background:#FAFAFB}
+.mb.on{border-color:var(--accent);background:var(--accent-soft)}
+.mb.on strong{color:var(--accent-ink)}
+
+input.cell{width:100%;min-width:86px;text-align:right;padding:6px 8px;font-size:12.5px;border:1px solid var(--line);border-radius:7px;font-family:var(--mono)}
+input.cellL{width:100%;min-width:110px;text-align:left;padding:6px 8px;font-size:12.5px;border:1px solid var(--line);border-radius:7px}
+input.cell:focus,input.cellL:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.xbtn{border:0;background:none;color:var(--muted-2);cursor:pointer;font-size:17px;padding:0 6px;line-height:1}
+.xbtn:hover{color:var(--loss)}
+
+.sum{max-width:560px;margin-top:6px}
+.sr{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
+.sr.tot{border-bottom:0;border-top:2px solid var(--line);font-weight:600;margin-top:4px;padding-top:13px}
+.sr.sub{color:var(--muted);font-size:12.5px}
+
+.msg{padding:11px 14px;border-radius:9px;font-size:13px;background:#FCEDEB;color:var(--loss);margin-top:12px}
+.msg.ok{background:#E8F6F0;color:var(--gain)}
+.tabsel{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tabsel button{border:1px solid var(--line);background:var(--card);color:var(--muted);padding:6px 14px;
+  border-radius:999px;font-size:12.5px;cursor:pointer}
+.tabsel button[aria-pressed="true"]{background:var(--text);border-color:var(--text);color:#fff;font-weight:600}
+
+/* แถบเลื่อนเลือกสัดส่วนของพอร์ต */
+.rngbox{max-width:560px;margin-top:12px}
+input.rng{-webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:999px;
+  background:var(--line);outline:none;margin:4px 0 2px;cursor:pointer}
+input.rng::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;border-radius:50%;
+  background:var(--accent);border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.22);cursor:pointer}
+input.rng::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);
+  border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.22);cursor:pointer}
+input.rng:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+input.rng:disabled{opacity:.35;cursor:not-allowed}
+.rngticks{display:flex;justify-content:space-between;font-size:11px;color:var(--muted-2);font-family:var(--mono)}
+#pctInfo{margin-top:7px}
+#pctInfo b{font-family:var(--mono);color:var(--text)}
+
+/* กล่อง autocomplete ลอยอยู่นอกตาราง เพราะตารางถูก re-render ทุกครั้งที่พิมพ์ */
+.ac{position:absolute;z-index:60;display:none;background:var(--card);border:1px solid var(--line);
+  border-radius:10px;box-shadow:0 8px 26px rgba(0,0,0,.11);max-height:310px;overflow:auto;min-width:330px}
+.ac-i{padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--line-soft);line-height:1.45}
+.ac-i:last-child{border-bottom:0}
+.ac-i:hover,.ac-i.on{background:var(--accent-soft)}
+.ac-i b{font-family:var(--mono);font-size:12.5px}
+.ac-i .m{display:block;font-size:11.5px;color:var(--muted)}
+.ac-i .r{float:right;font-family:var(--mono);font-size:11.5px;color:var(--muted-2)}
+.ac-i mark{background:#FBE9B0;color:inherit;padding:0 1px;border-radius:2px}
+.ac-none{padding:10px 12px;font-size:12.5px;color:var(--muted-2)}
+#modelBar select.f{width:auto;min-width:150px;padding:6px 10px;font-size:12.5px}
+#modelBar label.ck{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer}
+
+@media print{
+  @page{margin:13mm 12mm}
+  *,*::before,*::after{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  body{background:#fff;font-size:10px}
+  .topbar,.no-print{display:none!important}
+  main{padding:0;max-width:none}
+  .card{border:1px solid #E2E2E5;padding:13px 15px;margin-bottom:11px;break-inside:avoid}
+  .card-head h2{font-size:12px}
+  table{font-size:9px}th,td{padding:4px 6px}
+  input,select{border:0!important;background:transparent!important;font-size:9px;padding:0;width:auto;text-align:right}
+  .wrap{border:0;overflow:visible}
+  thead{display:table-header-group}
+  tr{break-inside:avoid}
+  .ac{display:none!important}
+}
+</style>
+
+<style id="rb7embed">
+  /* ปรับสำหรับการฝังเป็นแท็บในไฟล์หลัก */
+  html,body{background:transparent}
+  .topbar{position:static;border-top:0}
+  #printBtn{display:none}
+  main{padding-top:8px;padding-bottom:24px;max-width:none}
+  .pagefoot{display:none}          /* หน้าหลักมีข้อความกำกับท้ายหน้าอยู่แล้ว */
+</style>
+</head>
+<body>
+<header class="topbar no-print">
+  <div class="topin">
+    <div>
+      <div class="wordmark">ปรับสมดุลพอร์ต<span class="dot"></span></div>
+      <div class="tagline">เครื่องคำนวณแผนซื้อขายให้เข้าสัดส่วนโมเดล</div>
+      <div class="tagline" id="saveState" aria-live="polite"></div>
+    </div>
+    <div class="topact">
+      <button class="btn" id="saveFile">บันทึกไฟล์ข้อมูล</button>
+      <button class="btn" id="openFile">เปิดไฟล์ที่บันทึกไว้</button>
+      <button class="btn quiet" id="wipe">ล้างข้อมูลที่บันทึกไว้</button>
+      <button class="btn dark" id="printBtn">พิมพ์ / บันทึก PDF</button>
+      <input type="file" id="loadFile" accept=".json" hidden>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="card-head"><h2>1 · นำเข้าข้อมูลพอร์ต</h2>
+      <span class="aside">รองรับสองรูปแบบ · ระบบตรวจให้อัตโนมัติ</span></div>
+
+    <div class="tabsel no-print" id="fmtSel">
+      <button type="button" data-f="corp" aria-pressed="true">รูปแบบ Corporate Report</button>
+      <button type="button" data-f="std" aria-pressed="false">รูปแบบหัวตารางมาตรฐาน</button>
+    </div>
+
+    <div id="fmtHelp" class="foot" style="margin-bottom:12px"></div>
+
+    <div class="stack no-print" style="margin-top:0">
+      <button class="btn" id="copyHead">คัดลอกหัวตาราง</button>
+      <button class="btn" id="dlTemplate">ดาวน์โหลดไฟล์เปล่า (.csv)</button>
+      <label class="btn" for="pickFile">เลือกไฟล์ .csv / .tsv<input type="file" id="pickFile" accept=".csv,.tsv,.txt" hidden></label>
+    </div>
+
+    <label class="lab" for="paste" style="margin-top:14px">วางข้อมูลที่คัดลอกจาก Google Sheets หรือ Excel</label>
+    <textarea class="f" id="paste" placeholder="วางทั้งตารางรวมแถวหัวตารางได้เลย"></textarea>
+    <div class="stack">
+      <button class="btn amber" id="readBtn">อ่านข้อมูล</button>
+      <button class="btn quiet" id="clearBtn">ล้างช่อง</button>
+    </div>
+    <div id="err"></div>
+    <div id="dump" class="no-print" style="display:none;margin-top:14px">
+      <label class="lab" for="dumpTa">คัดลอกข้อความนี้เก็บไว้ แล้ววางกลับในช่องด้านบนเมื่อต้องการเปิดใหม่</label>
+      <textarea class="f" id="dumpTa" readonly style="min-height:110px"></textarea>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>2 · พอร์ตปัจจุบัน</h2>
+      <span class="aside" id="portInfo"></span></div>
+    <div class="stack no-print" style="margin-top:0">
+      <button class="btn" id="addRow">เพิ่มกองทุน</button>
+      <button class="btn quiet" id="clearRows">ล้างตาราง</button>
+      <span style="flex:1"></span>
+      <span class="foot">สัดส่วนโมเดล:</span>
+      <button class="btn sm" id="wEqual">แบ่งเท่ากัน</button>
+      <button class="btn sm" id="wCurrent">ใช้สัดส่วนปัจจุบัน</button>
+      <button class="btn sm" id="wCost">ใช้สัดส่วนต้นทุน</button>
+      <button class="btn sm" id="wNorm">ปรับให้ครบ 100%</button>
+    </div>
+    <div class="stack no-print" id="modelBar" style="margin-top:8px">
+      <span class="foot">โมเดลพอร์ต:</span>
+      <select class="f" id="modelPick" style="min-width:300px"><option value="">— กำลังโหลด —</option></select>
+      <button class="btn sm amber" id="applyModel">ใช้สัดส่วนนี้</button>
+      <button class="btn sm" id="navSync">อัปเดต NAV ล่าสุดทุกกอง</button>
+      <button class="btn sm quiet" id="refReload" title="ดึงข้อมูลใหม่จากชีต">รีเฟรชข้อมูล</button>
+      <label class="ck"><input type="checkbox" id="mAdd" checked> เพิ่มกองที่ยังไม่มีในพอร์ต</label>
+      <label class="ck"><input type="checkbox" id="mZero" checked> ตั้งกองนอกโมเดลเป็น 0%</label>
+    </div>
+    <div id="modelInfo" class="foot" style="margin-top:8px"></div>
+    <div class="wrap" style="margin-top:14px"><table id="pt" style="min-width:1060px"><thead><tr>
+      <th class="l">กองทุน</th><th class="l">บลจ.</th><th class="c">จำนวนหน่วย</th><th class="c">NAV ต้นทุน</th>
+      <th class="c">มูลค่าต้นทุน</th><th class="c">NAV ล่าสุด</th><th class="c">มูลค่าปัจจุบัน</th>
+      <th>กำไร/ขาดทุน</th><th>%</th><th class="c">ณ วันที่</th><th class="c">%โมเดล</th><th></th>
+    </tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>3 · เลือกวิธีปรับสมดุล</h2></div>
+    <div class="modes" id="modes">
+      <button type="button" class="mb on" data-m="topup"><strong>เติมเงินเพื่อปรับ</strong><small>เอาเงินใหม่เติมกองที่ต่ำกว่าเป้าก่อน ไม่ขายของเดิม</small></button>
+      <button type="button" class="mb" data-m="sell"><strong>ปรับสมดุลอย่างเดียว</strong><small>ไม่เติมเงินใหม่ ขายกองที่เกินเป้าไปซื้อกองที่ขาด</small></button>
+      <button type="button" class="mb" data-m="both"><strong>เติมเงินและขายพร้อมกัน</strong><small>ให้ทุกกองตรงสัดส่วนโมเดลพอดี</small></button>
+      <button type="button" class="mb" data-m="withdraw"><strong>ถอนเงินและปรับสมดุล</strong><small>ถอนเงินออก แล้วจัดสัดส่วนที่เหลือให้ตรงโมเดล</small></button>
+      <button type="button" class="mb" data-m="cashout"><strong>ถอนออกไปใช้ (ขายอย่างเดียว)</strong><small>ถอนโดยไม่ซื้อกองใดเพิ่ม ขายกองที่เกินสัดส่วนก่อน</small></button>
+    </div>
+    <div id="amtWrap" style="margin-top:16px">
+      <label class="lab" id="amtLab" for="amt">เงินที่จะเติมเพิ่ม (บาท)</label>
+      <div class="stack" style="margin-top:0">
+        <input class="f" id="amt" inputmode="decimal" autocomplete="off" value="0" style="width:180px">
+        <button class="btn sm" data-add="50000">+50,000</button>
+        <button class="btn sm" data-add="100000">+100,000</button>
+        <button class="btn sm" data-add="500000">+500,000</button>
+        <button class="btn sm quiet" id="clrAmt">ล้าง</button>
+        <button class="btn sm" id="minTop">เติมขั้นต่ำที่ไม่ต้องขาย</button>
+      </div>
+      <div class="stack no-print" id="pctBar">
+        <span class="foot" id="pctLab">คิดเป็นสัดส่วนของพอร์ต:</span>
+        <button class="btn sm tg" data-pct="25" aria-pressed="false">25%</button>
+        <button class="btn sm tg" data-pct="50" aria-pressed="false">50%</button>
+        <button class="btn sm tg" data-pct="75" aria-pressed="false">75%</button>
+        <button class="btn sm tg" data-pct="100" aria-pressed="false">100%</button>
+      </div>
+      <div class="rngbox no-print">
+        <input type="range" class="rng" id="pctRange" min="0" max="100" step="1" value="0"
+               aria-label="สัดส่วนของมูลค่าพอร์ต เป็นเปอร์เซ็นต์">
+        <div class="rngticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+        <div class="foot" id="pctInfo"></div>
+      </div>
+    </div>
+    <div class="stack">
+      <button class="btn sm tg" id="rnd" aria-pressed="false">ปัดยอดเป็นตัวเลขกลม</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>4 · ผลลัพธ์และรายการที่ต้องทำ</h2><span class="aside" id="resInfo"></span></div>
+    <div id="warn"></div>
+    <div class="wrap"><table id="t" style="min-width:900px"><thead><tr>
+      <th class="l">กองทุน</th><th>มูลค่าปัจจุบัน</th><th>%ปัจจุบัน</th><th class="c">%โมเดล</th>
+      <th>มูลค่าเป้าหมาย</th><th>ต้องซื้อ/ขาย</th><th class="c">รายการที่ต้องทำ</th>
+    </tr></thead><tbody></tbody><tfoot></tfoot></table></div>
+    <div class="sum" id="sum"></div>
+    <div id="plan" style="margin-top:22px"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>ข้อจำกัดของข้อมูลและการคำนวณ</h2></div>
+    <ul class="dlist">
+      <li>ยอดซื้อขายเป็นค่าประมาณก่อนค่าธรรมเนียม และ NAV จะเปลี่ยนไปในวันที่ทำรายการจริง ยอดที่ได้จริงจึงคลาดเคลื่อนได้</li>
+      <li>การปัดยอดเป็นตัวเลขกลมทำให้สัดส่วนคลาดจากแผนเล็กน้อย ระบบเลือกขั้นที่หยาบที่สุดเท่าที่คลาดไม่เกิน 1 จุด และแสดงค่าคลาดจริงไว้ให้ตรวจ เมื่อยอดรวมหารกับขั้นปัดไม่ลงตัว เศษที่เหลือจะถูกใส่ไว้ในกองเดียวที่ทำให้คลาดน้อยที่สุด ยอดรวมจึงเท่ากับที่ตั้งใจไว้เสมอ</li>
+      <li>โหมด &ldquo;ถอนออกไปใช้&rdquo; ขายเฉพาะกองที่เกินสัดส่วนโมเดลก่อนโดยไม่ซื้อกองใดเพิ่ม สัดส่วนหลังถอนจึงอาจยังไม่ตรงโมเดลทั้งหมด</li>
+      <li>แผนคำนวณเป็นบาท แต่ บลจ. บางแห่งรับคำสั่งขายเป็นหน่วย และมีขั้นต่ำของตัวเอง</li>
+      <li>มูลค่าและ NAV ที่นำเข้าเป็นข้อมูล ณ วันที่ในไฟล์ต้นทาง กองที่ลงทุนต่างประเทศมักช้ากว่า 1–3 วันทำการ ตัวเลขรวมจึงเป็นการผสมราคาต่างวันกัน</li>
+      <li>เครื่องมือนี้ไม่ตรวจเงื่อนไขของกอง เช่น ยอดขั้นต่ำ วันทำการซื้อขาย ระยะเวลาถือครองของ SSF/RMF ค่าธรรมเนียม หรือภาษี ต้องตรวจกับ บลจ. ก่อนทำรายการ</li>
+      <li>เครื่องมือนี้ไม่ได้ประเมินความเหมาะสมกับเป้าหมายการลงทุนหรือระดับความเสี่ยงที่ผู้ใช้รับได้ สัดส่วนโมเดลเป็นค่าที่ผู้ใช้กำหนดเองทั้งหมด</li>
+      <li>สัดส่วนโมเดลที่เลือกจากรายการ ดึงจากชีต port allocation ตามวันที่ประกาศล่าสุดที่ปรากฏในชีต ไม่ใช่ข้อมูลเรียลไทม์ และไม่ได้ตรวจว่ากองในโมเดลยังเปิดขายอยู่หรือไม่</li>
+      <li>ปุ่ม &ldquo;อัปเดต NAV ล่าสุดทุกกอง&rdquo; เขียนทับ NAV และวันที่ในตารางด้วยค่าจากไฟล์ NAV รายวัน กองที่ไม่มีจำนวนหน่วยจะไม่คำนวณมูลค่าใหม่ให้</li>
+      <li>การคำนวณทั้งหมดทำในเบราว์เซอร์ ข้อมูลพอร์ตไม่ถูกส่งไปยังบุคคลที่สาม แต่จะถูก<strong>บันทึกอัตโนมัติ</strong>ไว้สองที่คือในเบราว์เซอร์เครื่องนี้ และในพื้นที่เก็บข้อมูลของสคริปต์ในบัญชี Google ของผู้ใช้เอง กดปุ่ม &ldquo;ล้างข้อมูลที่บันทึกไว้&rdquo; เพื่อลบทั้งสองที่</li>
+      <li>หากตัวเลขไม่ตรงกับเอกสารจาก บลจ. ให้ยึดเอกสารจาก บลจ. เป็นหลัก</li>
+    </ul>
+    <p class="foot" style="margin-top:12px">เอกสารที่สร้างจากเครื่องมือนี้จัดทำเพื่อประกอบการพิจารณาเท่านั้น ไม่ใช่คำแนะนำการลงทุนเฉพาะบุคคล ผลตอบแทนในอดีตไม่ได้เป็นสิ่งยืนยันถึงผลตอบแทนในอนาคต การลงทุนมีความเสี่ยง ผู้ลงทุนควรศึกษาข้อมูลก่อนตัดสินใจลงทุน</p>
+  </section>
+</main>
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const el=(t,c,x)=>{const n=document.createElement(t); if(c)n.className=c; if(x!=null)n.textContent=x; return n;};
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const fmt=(n,d=2)=>(n==null||!isFinite(n))?"–":Number(n).toLocaleString("th-TH",{minimumFractionDigits:d,maximumFractionDigits:d});
+const f0=n=>fmt(n,0), sign=n=>(n>=0?"+":"")+fmt(n), pct=n=>(n==null||!isFinite(n))?"–":(n*100).toFixed(2)+"%";
+const cls=n=>n>0?"gain":(n<0?"loss":"");
+const num=v=>{const n=parseFloat(String(v==null?"":v).replace(/[,\s฿%]/g,"").replace(/\u2212/g,"-")); return isFinite(n)?n:0;};
+const key=s=>String(s||"").toUpperCase().replace(/\s+/g,"").replace(/[\u2010-\u2015\u2212]/g,"-");
+
+/* ---------- อ่าน CSV/TSV แบบเคารพเครื่องหมายคำพูด ---------- */
+function parseGrid(text){
+  const t=String(text||"").replace(/^\uFEFF/,"");
+  const tab=t.indexOf("\t")>=0 && (t.indexOf("\t")<t.indexOf(",")||t.indexOf(",")<0);
+  const sep=tab?"\t":",";
+  const rows=[]; let row=[], cur="", q=false;
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(q){
+      if(c==='"'){ if(t[i+1]==='"'){cur+='"';i++;} else q=false; }
+      else cur+=c;
+      continue;
+    }
+    if(c==='"'){ q=true; continue; }
+    if(c===sep){ row.push(cur); cur=""; continue; }
+    if(c==="\n"){ row.push(cur); rows.push(row); row=[]; cur=""; continue; }
+    if(c==="\r") continue;
+    cur+=c;
+  }
+  if(cur.length||row.length){ row.push(cur); rows.push(row); }
+  return rows.map(r=>r.map(x=>x.trim())).filter(r=>r.some(x=>x!==""));
+}
+const norm=s=>String(s||"").toLowerCase().replace(/\s+/g,"").replace(/[()._-]/g,"");
+function findCol(head,pats){
+  for(let i=0;i<head.length;i++){ const h=norm(head[i]); if(!h) continue;
+    if(pats.some(p=>p.test(h))) return i; }
+  return -1;
+}
+
+/* ---------- รูปแบบ Corporate Report ---------- */
+const CORP_HEAD=["Plan","AMC","Fund","Unit Cost (Baht)","Unit","Unit Value (Baht)","NAV Date","Cost (Baht)","%Cost","Total Value (Baht)","%Total Value","Value (Baht)","%Value"];
+const STD_HEAD=["กองทุน","บลจ.","จำนวนหน่วย","NAV ต้นทุน","มูลค่าต้นทุน","มูลค่าปัจจุบัน","กำไร/ขาดทุน","%ผลตอบแทน","NAV ล่าสุด","ณ วันที่"];
+/* หัวตารางที่มีเฉพาะในรายงาน Corporate Report เท่านั้น
+   (หัวไทยทั่วไปอย่าง "กองทุน / NAV ต้นทุน" ใช้แยกไม่ได้ เพราะรูปแบบมาตรฐานก็มีเหมือนกัน) */
+function looksCorp(rows){
+  for(const r of rows.slice(0,12)){
+    if(/unitcost|totalvalue|%cost|%totalvalue/.test(r.map(norm).join("|"))) return true;
+    if(/%ต้นทุน|%มูลค่ารวม|%มูลค่า/.test(r.map(x=>String(x).replace(/\s+/g,"")).join("|"))) return true;
+  }
+  return false;
+}
+function parseCorp(rows){
+  /* หาแถวหัวตาราง: อังกฤษ (Plan/AMC/Fund) หรือไทย (บลจ./กองทุน/NAV ต้นทุน) */
+  let hi=-1, thai=false;
+  for(let i=0;i<rows.length;i++){
+    const j=rows[i].map(norm).join("|");
+    if(/(^|\|)fund(\||$)/.test(j) && /unitcost|unit\b|cost/.test(j)){ hi=i; break; }
+    const tj=rows[i].map(x=>String(x).replace(/\s+/g,"")).join("|");
+    if(/กองทุน/.test(tj) && /NAVต้นทุน/.test(tj)){ hi=i; thai=true; break; }
+  }
+  if(hi<0) throw new Error("ไม่พบแถวหัวตารางของรูปแบบ Corporate Report");
+  const h=rows[hi];
+  const C = thai ? {
+    plan:-1,
+    amc:  findCol(h,[/^บลจ/]),
+    fund: findCol(h,[/^กองทุน/]),
+    navC: findCol(h,[/navต้นทุน/]),
+    unit: findCol(h,[/จำนวนหน่วย/]),
+    navN: findCol(h,[/navล่าสุด/]),
+    date: findCol(h,[/ณวันที่/]),
+    cost: findCol(h,[/มูลค่าต้นทุน/]),
+    pcost:findCol(h,[/^%ต้นทุน/]),
+    val:  findCol(h,[/มูลค่าปัจจุบัน/]),
+    pl:   findCol(h,[/กำไรขาดทุน/])
+  } : {
+    plan: findCol(h,[/^plan$/]),
+    amc:  findCol(h,[/^amc$/,/บลจ/]),
+    fund: findCol(h,[/^fund$/,/กองทุน/]),
+    navC: findCol(h,[/^unitcost/,/navต้นทุน/]),
+    unit: findCol(h,[/^unit$/,/^units?$/,/จำนวนหน่วย/]),
+    navN: findCol(h,[/^unitvalue/,/navล่าสุด/]),
+    date: findCol(h,[/navdate/,/ณวันที่/]),
+    cost: findCol(h,[/^cost/,/มูลค่าต้นทุน/]),
+    pcost:findCol(h,[/^%cost/]),
+    val:  findCol(h,[/^totalvalue/,/มูลค่าปัจจุบัน/]),
+    pl:   findCol(h,[/^value\(baht\)$/,/^value$/,/กำไรขาดทุน/])
+  };
+  if(C.fund<0) throw new Error("ไม่พบคอลัมน์ชื่อกองทุน");
+  const out=[]; let plan="";
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i];
+    const name=String(r[C.fund]||"").trim();
+    if(!name) continue;
+    if(norm(name)===norm(h[C.fund])) continue;                  /* หัวตารางซ้ำ */
+    if(C.plan>=0 && r[C.plan]) plan=String(r[C.plan]).trim();
+    const units=num(r[C.unit]), navC=num(r[C.navC]), navN=num(r[C.navN]);
+    let cost=C.cost>=0?num(r[C.cost]):0, val=C.val>=0?num(r[C.val]):0;
+    if(!cost && units && navC) cost=units*navC;
+    if(!val  && units && navN) val =units*navN;
+    if(!val && !cost && !units) continue;
+    out.push({
+      name, amc:C.amc>=0?String(r[C.amc]||"").trim():"",
+      units, navCost:navC || (units>0?cost/units:0),
+      cost, nav:navN || (units>0?val/units:0), value:val,
+      asOf:C.date>=0?String(r[C.date]||"").trim():"",
+      _wr: C.pcost>=0 ? String(r[C.pcost]==null?"":r[C.pcost]) : "",
+      w: 0
+    });
+  }
+  if(!out.length) throw new Error("อ่านข้อมูลได้ 0 กอง");
+  scaleWeights(out);
+  return {rows:out, plan};
+}
+/* ตัดสินหน่วยของคอลัมน์สัดส่วนจากผลรวมทั้งคอลัมน์ ไม่ใช่ทีละแถว
+   มิฉะนั้นกองที่ถือจริง 0.8% แต่เขียนมาว่า "0.8" จะถูกอ่านเป็น 80% */
+function scaleWeights(out){
+  const raw=out.map(o=>num(o._wr));
+  const hasPct=out.some(o=>String(o._wr).indexOf("%")>=0);
+  const sum=raw.reduce((a,b)=>a+b,0);
+  const scale = hasPct ? 1 : (sum>0 && sum<=1.5 ? 100 : 1);
+  out.forEach((o,i)=>{ o.w=Math.max(0,Math.min(100,raw[i]*scale)); delete o._wr; });
+}
+function parseStd(rows){
+  let hi=-1;
+  for(let i=0;i<rows.length;i++){
+    const tj=rows[i].map(x=>String(x).replace(/\s+/g,"")).join("|");
+    if(/กองทุน/.test(tj) && /(จำนวนหน่วย|NAV)/.test(tj)){ hi=i; break; }
+  }
+  const h = hi>=0 ? rows[hi] : null;
+  const idx = h ? {
+    fund:findCol(h,[/^กองทุน/,/^fund/]), amc:findCol(h,[/^บลจ/,/^amc/]),
+    units:findCol(h,[/จำนวนหน่วย/,/^units?$/]), navCost:findCol(h,[/navต้นทุน/,/unitcost/]),
+    cost:findCol(h,[/มูลค่าต้นทุน/,/^cost/]), value:findCol(h,[/มูลค่าปัจจุบัน/,/totalvalue/]),
+    pl:findCol(h,[/กำไรขาดทุน/]), ret:findCol(h,[/ผลตอบแทน/]),
+    nav:findCol(h,[/navล่าสุด/,/unitvalue/]), asOf:findCol(h,[/ณวันที่/,/navdate/])
+  } : {fund:0,amc:1,units:2,navCost:3,cost:4,value:5,pl:6,ret:7,nav:8,asOf:9};
+  const out=[];
+  for(let i=(hi>=0?hi+1:0);i<rows.length;i++){
+    const r=rows[i];
+    const g=k=>idx[k]>=0?r[idx[k]]:"";
+    const name=String(g("fund")||"").trim();
+    if(!name) continue;
+    const units=num(g("units")), navC=num(g("navCost")), nav=num(g("nav"));
+    let cost=num(g("cost")), value=num(g("value"));
+    if(!cost && units && navC) cost=units*navC;
+    if(!value && units && nav) value=units*nav;
+    if(!value && !cost && !units) continue;
+    out.push({name, amc:String(g("amc")||"").trim(), units,
+      navCost:navC||(units>0?cost/units:0), cost,
+      nav:nav||(units>0?value/units:0), value, asOf:String(g("asOf")||"").trim(), w:0});
+  }
+  if(!out.length) throw new Error("อ่านข้อมูลได้ 0 กอง — ตรวจว่ามีคอลัมน์ชื่อกองและจำนวนหน่วยหรือมูลค่า");
+  return {rows:out, plan:""};
+}
+
+/* ---------- สถานะ ---------- */
+let D=[], MODE="topup", AMT=0, RND=false, STEP=0, FMT="corp", PLAN="";
+const LADDER=[10000,5000,1000,500,100];
+const cur=()=>D.reduce((s,x)=>s+(+x.value||0),0);
+const wsum=()=>D.reduce((s,x)=>s+(+x.w||0),0);
+const costSum=()=>D.reduce((s,x)=>s+(+x.cost||0),0);
+
+/* ---------- บันทึกอัตโนมัติ ---------- */
+const LSKEY="rebalance.state.v1";
+const GAS = (typeof google!=="undefined" && google.script && google.script.run) ? google.script.run : null;
+let RESTORING=false, localT=null, cloudT=null;
+
+/* ทุกแถวที่มาจากไฟล์หรือที่บันทึกไว้ต้องถูกบังคับรูปทรงก่อนใช้ */
+const sane=r=>({
+  name:String(r&&r.name!=null?r.name:""), amc:String(r&&r.amc!=null?r.amc:""),
+  units:num(r&&r.units), navCost:num(r&&r.navCost), cost:num(r&&r.cost),
+  nav:num(r&&r.nav), value:num(r&&r.value), asOf:String(r&&r.asOf!=null?r.asOf:""),
+  w:Math.max(0,Math.min(100,num(r&&r.w)))
+});
+const MODES=["topup","sell","both","withdraw","cashout"];
+const snapshot=()=>({v:1,saved:new Date().toISOString(),plan:PLAN,fmt:FMT,mode:MODE,amt:AMT,round:RND,rows:D});
+function setSaved(t){ const n=$("#saveState"); if(n) n.textContent=t; }
+
+function scheduleSave(){
+  if(RESTORING) return;
+  clearTimeout(localT);
+  localT=setTimeout(()=>{
+    const s=JSON.stringify(snapshot());
+    let ok=false;
+    try{ localStorage.setItem(LSKEY,s); ok=true; }catch(e){}
+    setSaved(ok ? "บันทึกในเครื่องแล้ว "+new Date().toLocaleTimeString("th-TH") : "เบราว์เซอร์ไม่ให้บันทึกในเครื่อง");
+    if(GAS){
+      clearTimeout(cloudT);
+      cloudT=setTimeout(()=>{
+        GAS.withSuccessHandler(()=>setSaved("บันทึกในบัญชี Google แล้ว "+new Date().toLocaleTimeString("th-TH")))
+           .withFailureHandler(()=>setSaved("บันทึกในบัญชี Google ไม่สำเร็จ ข้อมูลยังอยู่ในเครื่อง"))
+           .saveState(s);
+      },2000);
+    }
+  },500);
+}
+function applyState(o){
+  RESTORING=true;
+  D=Array.isArray(o.rows)
+    ? o.rows.filter(r=>r&&typeof r==="object").map(sane).filter(r=>r.name||r.value||r.cost||r.units)
+    : [];
+  PLAN=String(o.plan||"");
+  MODE=MODES.indexOf(o.mode)>=0 ? o.mode : "topup";
+  AMT=Math.max(0,num(o.amt)); RND=!!o.round;
+  $("#amt").value=f0(AMT);
+  $("#rnd").setAttribute("aria-pressed",RND?"true":"false");
+  setFmt(o.fmt==="std"?"std":"corp"); syncModes(); drawPort(); draw();
+  RESTORING=false;
+}
+function boot(){
+  let local=null;
+  try{ const s=localStorage.getItem(LSKEY); if(s) local=JSON.parse(s); }catch(e){}
+  if(local && Array.isArray(local.rows)) applyState(local);
+  else { RESTORING=true; setFmt("corp"); syncModes(); drawPort(); draw(); RESTORING=false; }
+  if(GAS) GAS.withSuccessHandler(s=>{
+    if(!s) return;
+    try{
+      const o=JSON.parse(s);
+      if(!Array.isArray(o.rows)) return;
+      /* ของในเครื่องชนะเสมอถ้าใหม่กว่า จะได้ไม่ทับงานที่กำลังทำอยู่ */
+      if(local && local.saved && local.saved>=o.saved) return;
+      applyState(o);
+      setSaved("กู้ข้อมูลจากบัญชี Google แล้ว — "+f0(D.length)+" กอง");
+    }catch(e){}
+  }).loadState();
+}
+
+function roundPlan(diffs, values, step, targetSum, noSell){
+  if(!step||step<=0) return diffs.slice();
+  /* ขายได้ไม่เกินที่ถืออยู่ และในโหมดเติมเงินห้ามพลิกเป็นการขาย */
+  const floor=values.map(v=> noSell ? 0 : -v);
+  const lim=floor.map(f=>Math.ceil((f-0.5)/step));   /* ขั้นต่ำสุดที่แต่ละกองรับได้ */
+  const k=Math.round(targetSum/step);
+  /* การปัดรอบแรกเองก็ขายเกินได้ ถ้า diff ติดลบมากกว่าที่ถือครึ่งขั้น จึงต้องคุมตั้งแต่ตรงนี้ */
+  const r=diffs.map((x,i)=>Math.max(Math.round(x/step), lim[i]));
+  const err=diffs.map((x,i)=> x/step - r[i]);
+  let resid=k-r.reduce((a,b)=>a+b,0), guard=0;
+  while(resid!==0 && guard++<5000){
+    const dir=resid>0?1:-1;
+    let best=-1,bv=-Infinity;
+    for(let i=0;i<r.length;i++){
+      if(dir<0 && r[i]-1 < lim[i]) continue;
+      const v=dir>0?err[i]:-err[i];
+      if(v>bv){bv=v;best=i;}
+    }
+    if(best<0) break;
+    r[best]+=dir; err[best]-=dir; resid-=dir;
+  }
+  return r.map(x=>x*step);
+}
+/* ปัดกลมทุกกอง แล้วโยนเศษที่เหลือลงกองเดียว
+   เพื่อให้ยอดรวมเท่ากับที่ตั้งใจเป๊ะ โดยเลือกกองที่ทำให้คลาดจากสัดส่วนโมเดลน้อยที่สุด
+   คืน odd = ดัชนีกองที่รับเศษ (-1 คือไม่มีเศษ) */
+function roundKeepTotal(diffs, values, step, targetSum, noSell){
+  const r=roundPlan(diffs, values, step, targetSum, noSell);
+  const rest=targetSum - r.reduce((a,b)=>a+b,0);
+  if(!step || Math.abs(rest)<0.005) return {plan:r, odd:-1, rest:0, split:0};
+
+  const base=Math.abs(values.reduce((a,b)=>a+b,0)+targetSum)||1;
+  const floor=values.map(v=> noSell ? 0 : -v);
+  const devOfPlan=p=>{
+    let m=0;
+    for(let i=0;i<p.length;i++) m=Math.max(m, Math.abs(p[i]-diffs[i])/base*100);
+    return m;
+  };
+  let best=-1, bd=Infinity, bn=9;
+  for(let i=0;i<r.length;i++){
+    const v=r[i]+rest;
+    if(v<floor[i]-1e-6) continue;
+    const p=r.slice(); p[i]=v;
+    const d=Math.round(devOfPlan(p)*1e4)/1e4;
+    /* เท่ากันเมื่อไร ให้เศษไปลงกองที่มีรายการอยู่แล้ว จะได้ไม่เกิดรายการใหม่เล็ก ๆ */
+    const n=Math.abs(r[i])>=step-1e-6?0:1;
+    if(d<bd || (d===bd && n<bn)){ best=i; bd=d; bn=n; }
+  }
+  if(best<0){
+    /* ไม่มีกองไหนรับเศษทั้งก้อนได้ ค่อยแบ่งลงหลายกองเพื่อรักษายอดรวมไว้ */
+    const out=r.slice(); let left=rest, odds=[];
+    const order=r.map((_,i)=>i).sort((a,b)=>Math.abs(r[a]-diffs[a])-Math.abs(r[b]-diffs[b]));
+    for(const i of order){
+      if(Math.abs(left)<0.005) break;
+      const room=left>0 ? left : Math.max(left, floor[i]-out[i]);
+      if(Math.abs(room)<0.005) continue;
+      out[i]+=room; left-=room; odds.push(i);
+    }
+    return {plan:out, odd:odds.length===1?odds[0]:-1, rest, split:odds.length};
+  }
+  const out=r.slice(); out[best]+=rest;
+  return {plan:out, odd:best, rest, split:1};
+}
+/* ขายอย่างเดียวแต่เข้าใกล้โมเดลที่สุด */
+function sellOnlyPlan(values, weights, amount){
+  const c=values.reduce((a,b)=>a+b,0);
+  const take=Math.min(Math.max(0,amount), c), tgt=c-take;
+  const ws=weights.reduce((a,b)=>a+(+b||0),0);
+  if(ws<=0||take<=0) return values.map(v=> c>0 ? -take*(v/c) : 0);
+  const w=weights.map(x=>(+x||0)/ws);
+  const cap=values.reduce((s,v,i)=> s+(w[i]>0?v:0),0);
+  if(tgt>cap+1e-6){
+    const zs=values.reduce((s,v,i)=> s+(w[i]>0?0:v),0);
+    return values.map((v,i)=> w[i]>0 ? 0 : (zs>0? -take*(v/zs) : 0));
+  }
+  let lo=0, hi=Math.max(...values.map((v,i)=> w[i]>0? v/w[i]:0))*1.05+1;
+  for(let it=0; it<200; it++){
+    const mid=(lo+hi)/2;
+    const sum=values.reduce((s,v,i)=> s+Math.min(v, mid*w[i]),0);
+    if(sum<tgt) lo=mid; else hi=mid;
+  }
+  const lam=(lo+hi)/2;
+  return values.map((v,i)=> Math.min(v, lam*w[i]) - v);
+}
+function minTop(){
+  const c=cur(), ws=wsum(); let need=0;
+  D.forEach(x=>{ const w=(+x.w||0)/(ws||1); if(w>0) need=Math.max(need,(+x.value||0)/w); });
+  return Math.max(0,need-c);
+}
+
+/* ---------- ตารางพอร์ต ---------- */
+function drawPort(){
+  const ae=document.activeElement;
+  const fi=(ae&&ae.dataset&&ae.dataset.pi!=null)?ae.dataset.pi+"|"+ae.dataset.pf:null;
+  const fv=fi?ae.value:null, ss=fi?ae.selectionStart:null;
+  const c=cur(), tc=costSum();
+  const cell=(i,f,x,dec,klass)=>{
+    const k=i+"|"+f;
+    const raw = k===fi ? fv : (dec==null ? String(x[f]==null?"":x[f]) : Number(x[f]||0).toFixed(dec));
+    const LBL={name:"ชื่อกองทุน",amc:"บลจ.",units:"จำนวนหน่วย",navCost:"NAV ต้นทุน",cost:"มูลค่าต้นทุน",nav:"NAV ล่าสุด",value:"มูลค่าปัจจุบัน",asOf:"ณ วันที่",w:"สัดส่วนโมเดล %"};
+    return `<input class="${klass||"cell"}" data-pi="${i}" data-pf="${f}" inputmode="decimal" autocomplete="off"
+      aria-label="${esc(LBL[f]||f)} แถวที่ ${i+1}" value="${esc(raw)}">`;
+  };
+  $("#pt tbody").innerHTML = D.length ? D.map((x,i)=>{
+    const pl=(+x.value||0)-(+x.cost||0);
+    const pp=(+x.cost)>0 ? pl/x.cost : null;
+    return `<tr>
+      <td class="l">${cell(i,"name",x,null,"cellL")}</td>
+      <td class="l">${cell(i,"amc",x,null,"cellL")}</td>
+      <td class="c">${cell(i,"units",x,4)}</td>
+      <td class="c">${cell(i,"navCost",x,4)}</td>
+      <td class="c">${cell(i,"cost",x,2)}</td>
+      <td class="c">${cell(i,"nav",x,4)}</td>
+      <td class="c">${cell(i,"value",x,2)}</td>
+      <td class="num ${cls(pl)}">${x.cost?sign(pl):"–"}</td>
+      <td class="num ${cls(pl)}">${pp==null?"–":(pp>=0?"+":"")+pct(pp)}</td>
+      <td class="c" style="font-size:12px;color:var(--muted)">${cell(i,"asOf",x,null,"cellL")}</td>
+      <td class="c">${cell(i,"w",x,1)}</td>
+      <td class="c"><button class="xbtn no-print" data-del="${i}" title="ลบแถวนี้">×</button></td></tr>`;
+  }).join("") : `<tr><td colspan="12" class="l" style="padding:22px;color:var(--muted-2)">ยังไม่มีข้อมูล — วางตารางในช่องด้านบน หรือกด “เพิ่มกองทุน”</td></tr>`;
+  const tp=c-tc;
+  $("#pt tfoot").innerHTML = D.length ? `<tr><td class="l">รวม ${f0(D.length)} กอง</td><td></td><td></td><td></td>
+    <td class="num" style="text-align:right">${fmt(tc)}</td><td></td>
+    <td class="num" style="text-align:right">${fmt(c)}</td>
+    <td class="num ${cls(tp)}">${tc?sign(tp):"–"}</td>
+    <td class="num ${cls(tp)}">${tc>0?(tp>=0?"+":"")+pct(tp/tc):"–"}</td>
+    <td></td><td class="num" style="text-align:right">${wsum().toFixed(1)}%</td><td></td></tr>` : "";
+  $$("#pt input").forEach(inp=>{
+    inp.oninput=e=>{
+      const i=+e.target.dataset.pi, f=e.target.dataset.pf, v=e.target.value;
+      if(f==="name"||f==="amc"||f==="asOf") D[i][f]=v;
+      else{
+        D[i][f]=num(v);
+        if(f==="units"||f==="nav"){ const u=+D[i].units||0,n=+D[i].nav||0; if(u>0&&n>0) D[i].value=u*n; }
+        if(f==="units"||f==="navCost"){ const u=+D[i].units||0,n=+D[i].navCost||0; if(u>0&&n>0) D[i].cost=u*n; }
+        if(f==="value"){ const u=+D[i].units||0; if(u>0) D[i].nav=D[i].value/u; }
+        if(f==="w") D[i].w=Math.max(0,Math.min(100,D[i].w));
+      }
+      drawPort(); draw();
+    };
+    inp.onblur=()=>{ drawPort(); draw(); };
+  });
+  $$("#pt [data-del]").forEach(b=>b.onclick=()=>{ if(document.activeElement)document.activeElement.blur(); D.splice(+b.dataset.del,1); drawPort(); draw(); });
+  if(fi){ const e2=$(`#pt input[data-pi="${fi.split("|")[0]}"][data-pf="${fi.split("|")[1]}"]`);
+    if(e2){ e2.focus(); try{e2.setSelectionRange(ss,ss);}catch(e){} } }
+  $("#portInfo").textContent = D.length ? `${f0(D.length)} กอง · มูลค่ารวม ${fmt(c)} บาท${PLAN?" · แผน "+PLAN:""}` : "";
+}
+
+/* ---------- คำนวณแผน ---------- */
+function draw(){
+  const c=cur(), ws=wsum();
+  const flow = MODE==="topup"||MODE==="both" ? AMT : ((MODE==="withdraw"||MODE==="cashout") ? -AMT : 0);
+  const tgt=c+flow;
+  const ideal=x=> ws>0 ? tgt*((+x.w||0)/ws) : 0;
+  const noSell = MODE==="topup";
+  /* สัดส่วนโมเดลรวมเป็นศูนย์ = ทุกกองมีเป้าหมาย 0 บาท ซึ่งจะกลายเป็นแผน "ขายทั้งพอร์ต"
+     กรณีนี้ไม่คำนวณ และบอกให้ตั้งสัดส่วนก่อน */
+  const noModel = D.length>0 && ws<=0;
+  $("#warn").innerHTML = noModel
+    ? `<div class="msg" style="margin:0 0 14px">ยังไม่ได้ตั้งสัดส่วนโมเดล — รวมได้ 0% จึงยังคำนวณแผนไม่ได้ กด “ใช้สัดส่วนปัจจุบัน” หรือ “แบ่งเท่ากัน” ในตารางพอร์ตก่อน</div>`
+    : "";
+
+  let raw;
+  if(!D.length || noModel) raw=D.map(()=>0);
+  else if(MODE==="cashout") raw=sellOnlyPlan(D.map(x=>+x.value||0), D.map(x=>+x.w||0), AMT);
+  else if(MODE==="topup"){
+    const gaps=D.map(x=>Math.max(0, ideal(x)-(+x.value||0))), gs=gaps.reduce((a,b)=>a+b,0);
+    raw=gaps.map(g=> gs>0 ? AMT*(g/gs) : 0);
+  } else raw=D.map(x=> ideal(x)-(+x.value||0));
+  const rawSum=raw.reduce((a,b)=>a+b,0);
+  const vals=D.map(x=>+x.value||0);
+  const idealAft=D.map((x,i)=>(+x.value||0)+raw[i]), idealS=idealAft.reduce((a,b)=>a+b,0)||1;
+  const mpct=idealAft.map(v=>v/idealS*100);
+  const devOf=st=>{
+    const o=roundKeepTotal(raw, vals, st, rawSum, noSell).plan;
+    const aft=vals.map((v,i)=>v+o[i]), s2=aft.reduce((a,b)=>a+b,0)||1;
+    let m=0; aft.forEach((v,i)=>{ m=Math.max(m, Math.abs(v/s2*100-mpct[i])); });
+    return m;
+  };
+  STEP = (RND && D.length && !noModel) ? (LADDER.find(st=>devOf(st)<=1) || 100) : 0;
+  const RK=roundKeepTotal(raw, vals, STEP, rawSum, noSell), plan=RK.plan;
+  const roundCnt=STEP ? plan.filter(z=>Math.abs(z%STEP)<0.005).length : 0;
+
+  $("#t tbody").innerHTML = D.length ? D.map((x,i)=>{
+    const d=plan[i]||0, v=+x.value||0, tv=v+d;
+    return `<tr><td class="l"><strong>${esc(x.name)}</strong>${x.amc?`<div style="font-size:11px;color:var(--muted-2)">${esc(x.amc)}</div>`:""}</td>
+      <td class="num">${fmt(v)}</td><td class="num">${c>0?pct(v/c):"–"}</td>
+      <td class="c num">${(+x.w||0).toFixed(1)}%</td>
+      <td class="num">${fmt(tv)}</td>
+      <td class="num ${cls(d)}">${Math.abs(d)<1?"–":sign(d)}</td>
+      <td class="c">${Math.abs(d)<1?'<span class="pill gone">คงไว้</span>':(d>0?`<span class="pill ok">ซื้อ ${f0(d)}</span>`:`<span class="pill bad">ขาย ${f0(-d)}</span>`)}</td></tr>`;
+  }).join("") : `<tr><td colspan="7" class="l" style="padding:22px;color:var(--muted-2)">ยังไม่มีข้อมูลพอร์ต</td></tr>`;
+
+  const buy=plan.reduce((s,z)=>s+Math.max(0,z),0), sell=plan.reduce((s,z)=>s+Math.max(0,-z),0);
+  const aft=vals.map((v,i)=>v+plan[i]), aftSum=aft.reduce((a,b)=>a+b,0)||1;
+  let maxDev=0; D.forEach((x,i)=>{ maxDev=Math.max(maxDev, Math.abs(aft[i]/aftSum*100-mpct[i])); });
+
+  /* กระแสเงินที่เกิดขึ้นจริงหลังปัดยอด อาจไม่เท่าจำนวนที่กรอกไว้ */
+  const netFlow = buy-sell;
+  const after = c+netFlow;
+  const isOut = MODE==="withdraw"||MODE==="cashout";
+  const unused = isOut ? AMT-(-netFlow) : AMT-netFlow;
+
+  $("#t tfoot").innerHTML = D.length ? `<tr><td class="l">รวม</td><td class="num">${fmt(c)}</td><td class="num">100.00%</td>
+    <td class="c num">${ws.toFixed(1)}%</td><td class="num">${fmt(after)}</td>
+    <td class="num">${sign(netFlow)}</td><td></td></tr>` : "";
+
+  $("#sum").innerHTML = D.length ? `
+    <div class="sr"><span>มูลค่าพอร์ตปัจจุบัน</span><b class="num">${fmt(c)}</b></div>
+    <div class="sr"><span>${isOut?"เงินที่ตั้งใจถอนออก":"เงินที่ตั้งใจเติมเข้า"}</span><b class="num ${cls(flow)}">${flow?sign(flow):"–"}</b></div>
+    <div class="sr"><span>ต้องซื้อรวม</span><b class="num gain">${fmt(buy)}</b></div>
+    <div class="sr"><span>ต้องขายรวม</span><b class="num loss">${fmt(sell)}</b></div>
+    ${AMT>0&&Math.abs(unused)>=1?`<div class="sr"><span>${isOut?"ถอนได้จริงตามแผนนี้ ขาดไป":"เงินที่เหลือยังไม่ได้ลงทุน"}</span><b class="num loss">${fmt(Math.abs(unused))}</b></div>`:""}
+    <div class="sr tot"><span>มูลค่าพอร์ตหลังปรับ</span><b class="num">${fmt(after)}</b></div>
+    <div class="sr sub"><span>เงินเติมขั้นต่ำที่จะไม่ต้องขายกองใดเลย</span><b class="num">${fmt(minTop())}</b></div>
+    ${STEP?`<div class="sr sub"><span>ปัดยอดทีละ ${f0(STEP)} บาท · คลาดจากแผนก่อนปัด</span><b class="num ${maxDev>2?"loss":"gain"}">${maxDev.toFixed(2)} จุด</b></div>`:""}
+    ${STEP&&RK.odd>=0?`<div class="sr sub"><span>กลม ${f0(roundCnt)} จาก ${f0(D.length)} กอง · เศษ ${fmt(Math.abs(RK.rest))} บาท ลงที่</span><b>${esc(D[RK.odd].name)}</b></div>`:""}
+    ${STEP&&RK.odd<0?`<div class="sr sub"><span>ปัดกลมได้ครบทุกกอง ยอดรวมลงตัวพอดี</span><b>${f0(D.length)} กอง</b></div>`:""}
+    ${(ws<=0||Math.abs(ws-100)<0.05)?"":`<div class="sr sub"><span>สัดส่วนโมเดลรวม ${ws.toFixed(1)}% ไม่ใช่ 100%</span><b>ระบบเกลี่ยเป็น 100% ให้ชั่วคราว</b></div>`}` : "";
+
+  const acts=D.map((x,i)=>({n:x.name,d:plan[i]||0,odd:i===RK.odd})).filter(o=>Math.abs(o.d)>=1).sort((a,b)=>b.d-a.d);
+  $("#plan").innerHTML = acts.length
+    ? `<div class="eyebrow">รายการที่ต้องทำ</div><div class="wrap"><table><thead><tr>
+        <th class="c">ลำดับ</th><th class="l">รายการ</th><th>จำนวนเงิน</th></tr></thead><tbody>${
+        acts.map((o,i)=>`<tr><td class="c num">${i+1}</td>
+          <td class="l">${o.d>0?"ซื้อ":"ขาย"} <strong>${esc(o.n)}</strong>${o.odd?` <span class="pill gone">กองรับเศษ</span>`:""}</td>
+          <td class="num ${cls(o.d)}">${fmt(Math.abs(o.d))}</td></tr>`).join("")}</tbody></table></div>`
+    : ((D.length && !noModel)?`<p class="foot">พอร์ตตรงกับสัดส่วนโมเดลแล้ว ไม่ต้องทำรายการใด</p>`:"");
+  $("#resInfo").textContent = !D.length ? "" : noModel ? "รอตั้งสัดส่วนโมเดล"
+    : `${acts.length?f0(acts.length)+" รายการ":"ไม่มีรายการ"}${STEP?" · ปัดทีละ "+f0(STEP):""}`;
+  syncPctUI();
+  scheduleSave();
+}
+
+/* ---------- ปุ่ม % และแถบเลื่อน ---------- */
+/* จำนวนเงินยังเป็นค่าหลักเสมอ ส่วน % เป็นแค่วิธีกรอกอีกทางหนึ่ง
+   ทุกอย่างจึงคำนวณกลับไปเป็นบาททันทีที่เลื่อนหรือกดปุ่ม */
+function setPct(p){
+  const c=cur();
+  if(!(c>0)) return;
+  AMT=Math.max(0,Math.round(c*Math.max(0,Math.min(100,p))/100));
+  $("#amt").value=f0(AMT);
+  draw();
+}
+function syncPctUI(){
+  const r=$("#pctRange"); if(!r) return;
+  const c=cur(), p = c>0 ? AMT/c*100 : 0;
+  const clamped=Math.max(0,Math.min(100,p));
+  const isOut = MODE==="withdraw"||MODE==="cashout";
+
+  r.disabled = !(c>0);
+  r.value = Math.round(clamped);
+  r.style.background = `linear-gradient(90deg,var(--accent) 0%,var(--accent) ${clamped}%,var(--line) ${clamped}%,var(--line) 100%)`;
+
+  $("#pctLab").textContent = isOut ? "ถอนเป็นสัดส่วนของพอร์ต:" : "เติมเป็นสัดส่วนของพอร์ต:";
+  $$("[data-pct]").forEach(b=>b.setAttribute("aria-pressed",
+    (c>0 && Math.abs(p-(+b.dataset.pct))<0.05) ? "true":"false"));
+
+  let info;
+  if(!(c>0)) info="ยังไม่มีมูลค่าพอร์ต จึงคำนวณสัดส่วนไม่ได้";
+  else if(!AMT) info=`มูลค่าพอร์ตปัจจุบัน <b>${fmt(c)}</b> บาท — เลื่อนแถบหรือกดปุ่มเพื่อกำหนดจำนวน`;
+  else{
+    info=`<b>${p.toFixed(1)}%</b> ของพอร์ต ${fmt(c)} บาท = <b>${fmt(AMT)}</b> บาท`;
+    if(isOut && p>=99.95) info+=` · <span class="loss">เท่ากับขายทั้งพอร์ต</span>`;
+    else if(isOut && AMT>c) info+=` · <span class="loss">มากกว่ามูลค่าพอร์ต ถอนได้จริงแค่ ${fmt(c)}</span>`;
+    else if(p>100) info+=` · <span class="loss">เกิน 100% แถบเลื่อนจึงค้างที่ปลายสุด</span>`;
+  }
+  $("#pctInfo").innerHTML=info;
+}
+$$("[data-pct]").forEach(b=>b.addEventListener("click",()=>setPct(+b.dataset.pct)));
+$("#pctRange").addEventListener("input",e=>setPct(+e.target.value));
+
+/* ---------- นำเข้า ---------- */
+function showErr(msg,ok){ const b=$("#err"); b.innerHTML=""; if(msg) b.appendChild(el("div","msg"+(ok?" ok":""),msg)); }
+function setFmt(f){
+  FMT=f;
+  $$("#fmtSel button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.f===f?"true":"false"));
+  $("#fmtHelp").innerHTML = f==="corp"
+    ? `คอลัมน์: <strong>Plan · AMC · Fund · Unit Cost · Unit · Unit Value · NAV Date · Cost · %Cost · Total Value · %Total Value · Value · %Value</strong> — วางทั้งตารางได้เลย ระบบอ่านหัวตารางเอง และรับหัวตารางภาษาไทย (บลจ. / กองทุน / NAV ต้นทุน …) ด้วย · จะใช้ <strong>%Cost</strong> เป็นสัดส่วนโมเดลเริ่มต้น`
+    : `คอลัมน์: <strong>กองทุน · บลจ. · จำนวนหน่วย · NAV ต้นทุน · มูลค่าต้นทุน · มูลค่าปัจจุบัน · กำไร/ขาดทุน · %ผลตอบแทน · NAV ล่าสุด · ณ วันที่</strong> — มีหรือไม่มีแถวหัวตารางก็ได้`;
+}
+function readData(text,label){
+  try{
+    if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    const rows=parseGrid(text);
+    if(!rows.length) throw new Error("ไม่พบข้อมูล");
+    const auto = looksCorp(rows) ? "corp" : FMT;
+    const res = auto==="corp" ? parseCorp(rows) : parseStd(rows);
+    D=res.rows.map(sane); PLAN=res.plan||"";
+    if(!wsum()){ const c=cur(); D.forEach(x=>x.w = c>0 ? (+x.value||0)/c*100 : 0); }
+    if(auto!==FMT) setFmt(auto);
+    drawPort(); draw();
+    showErr(`อ่านได้ ${f0(D.length)} กอง${label?" จาก "+label:""}${PLAN?" · แผน "+PLAN:""} — มูลค่ารวม ${fmt(cur())} บาท`,true);
+  }catch(e){ showErr(e.message||String(e)); }
+}
+
+/* ---------- ต่อสายปุ่ม ---------- */
+$$("#fmtSel button").forEach(b=>b.addEventListener("click",()=>setFmt(b.dataset.f)));
+$("#readBtn").addEventListener("click",()=>{
+  const t=$("#paste").value.trim();
+  if(!t){ showErr("ยังไม่ได้วางข้อมูล"); return; }
+  readData(t,"ข้อมูลที่วาง");
+});
+$("#clearBtn").addEventListener("click",()=>{ $("#paste").value=""; showErr(""); });
+$("#pickFile").addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ $("#paste").value=String(fr.result); readData(String(fr.result),f.name); };
+  fr.readAsText(f,"utf-8");
+});
+["dragover","drop"].forEach(ev=>$("#paste").addEventListener(ev,e=>{
+  e.preventDefault();
+  if(ev!=="drop") return;
+  const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ $("#paste").value=String(fr.result); readData(String(fr.result),f.name); };
+  fr.readAsText(f,"utf-8");
+}));
+$("#copyHead").addEventListener("click",async()=>{
+  const t=(FMT==="corp"?CORP_HEAD:STD_HEAD).join("\t");
+  try{ await navigator.clipboard.writeText(t); }
+  catch(e){ const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+  showErr("คัดลอกหัวตารางแล้ว วางในช่อง A1 ของชีตใหม่ได้เลย",true);
+});
+/* Apps Script เสิร์ฟหน้าเว็บใน iframe แบบ sandbox บางเบราว์เซอร์บล็อกการดาวน์โหลดจากตรงนั้น
+   จึงมีทางสำรองเป็นการแสดงข้อความให้คัดลอกแทน */
+function download(name, mime, text){
+  try{
+    const b=new Blob([text],{type:mime});
+    const u=URL.createObjectURL(b), a=document.createElement("a");
+    a.href=u; a.download=name; a.rel="noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),2000);
+    return true;
+  }catch(e){ return false; }
+}
+function showDump(text,msg){
+  $("#dump").style.display="block";
+  $("#dumpTa").value=text;
+  $("#dumpTa").focus(); $("#dumpTa").select();
+  showErr(msg,true);
+  $("#dump").scrollIntoView({block:"nearest"});
+}
+
+$("#dlTemplate").addEventListener("click",()=>{
+  const head=(FMT==="corp"?CORP_HEAD:STD_HEAD);
+  const sample = FMT==="corp"
+    ? ['A.Stotz All Weather Strategy','SCBAM','SCBCOMP','7.8651','129264.7735','8.4002','"Aug 24, 2026"','1016680.37','24.64%','1085849.95','25.52%','69169.58','6.80%']
+    : ['SCBCOMP','SCBAM','129264.7735','7.8651','1016680.37','1085849.95','69169.58','6.80%','8.4002','24/08/2026'];
+  const csv="\ufeff"+head.join(",")+"\n"+sample.join(",")+"\n";
+  const okDl=download((FMT==="corp"?"corporate-report":"portfolio")+"-template.csv","text/csv;charset=utf-8",csv);
+  if(!okDl) showDump(csv,"ดาวน์โหลดไม่ได้ในหน้าต่างนี้ คัดลอกข้อความด้านล่างไปวางในชีตแทนได้");
+});
+
+$("#addRow").addEventListener("click",()=>{ D.push({name:"กองทุนใหม่",amc:"",units:0,navCost:0,cost:0,nav:0,value:0,asOf:"",w:0}); drawPort(); draw(); });
+$("#clearRows").addEventListener("click",()=>{ if(document.activeElement)document.activeElement.blur(); D=[]; PLAN=""; drawPort(); draw(); });
+$("#wEqual").addEventListener("click",()=>{ const n=D.length||1; D.forEach(x=>x.w=100/n); drawPort(); draw(); });
+$("#wCurrent").addEventListener("click",()=>{ const c=cur(); D.forEach(x=>x.w= c>0?(+x.value||0)/c*100:0); drawPort(); draw(); });
+$("#wCost").addEventListener("click",()=>{ const c=costSum(); D.forEach(x=>x.w= c>0?(+x.cost||0)/c*100:0); drawPort(); draw(); });
+$("#wNorm").addEventListener("click",()=>{ const s=wsum(); if(s>0) D.forEach(x=>x.w=(+x.w||0)/s*100); drawPort(); draw(); });
+
+$$("#modes .mb").forEach(b=>b.addEventListener("click",()=>{ MODE=b.dataset.m; syncModes(); draw(); }));
+function syncModes(){
+  $$("#modes .mb").forEach(b=>b.classList.toggle("on", b.dataset.m===MODE));
+  $("#amtWrap").style.display = MODE==="sell" ? "none":"block";
+  $("#amtLab").textContent = (MODE==="withdraw"||MODE==="cashout") ? "เงินที่จะถอนออก (บาท)" : "เงินที่จะเติมเพิ่ม (บาท)";
+  $("#minTop").style.display = MODE==="topup" ? "" : "none";
+}
+$("#amt").addEventListener("input",e=>{ AMT=Math.max(0,num(e.target.value)); draw(); });
+$$("[data-add]").forEach(b=>b.addEventListener("click",()=>{ AMT+= +b.dataset.add; $("#amt").value=f0(AMT); draw(); }));
+$("#clrAmt").addEventListener("click",()=>{ AMT=0; $("#amt").value="0"; draw(); });
+$("#minTop").addEventListener("click",()=>{ AMT=Math.ceil(minTop()); $("#amt").value=f0(AMT); MODE="topup"; syncModes(); draw(); });
+$("#rnd").addEventListener("click",()=>{ RND=!RND; $("#rnd").setAttribute("aria-pressed",RND?"true":"false"); draw(); });
+$("#printBtn").addEventListener("click",()=>window.print());
+
+$("#saveFile").addEventListener("click",()=>{
+  const json=JSON.stringify(snapshot());
+  const okDl=download(`rebalance-${new Date().toISOString().slice(0,10)}.json`,"application/json",json);
+  if(okDl) showErr("บันทึกไฟล์แล้ว",true);
+  else showDump(json,"ดาวน์โหลดไม่ได้ในหน้าต่างนี้ คัดลอกข้อความด้านล่างเก็บไว้แทนได้");
+});
+$("#openFile").addEventListener("click",()=>$("#loadFile").click());
+$("#loadFile").addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const fr=new FileReader();
+  fr.onload=()=>{
+    try{
+      const o=JSON.parse(String(fr.result));
+      if(!Array.isArray(o.rows)) throw new Error("ไฟล์นี้ไม่มีรายการกองทุน");
+      applyState(o);
+      scheduleSave();
+      showErr(`เปิดไฟล์ ${f.name} แล้ว — ${f0(D.length)} กอง`,true);
+    }catch(err){ showErr("อ่านไฟล์ไม่สำเร็จ: "+(err.message||err)); }
+  };
+  fr.readAsText(f,"utf-8");
+});
+$("#wipe").addEventListener("click",()=>{
+  if(!confirm("ล้างข้อมูลพอร์ตและที่บันทึกไว้ทั้งหมด ยืนยันหรือไม่")) return;
+  clearTimeout(localT); clearTimeout(cloudT);
+  try{ localStorage.removeItem(LSKEY); }catch(e){}
+  if(GAS) GAS.clearState();
+  RESTORING=true;
+  D=[]; PLAN=""; MODE="topup"; AMT=0; RND=false;
+  $("#amt").value="0"; $("#rnd").setAttribute("aria-pressed","false");
+  $("#dump").style.display="none"; $("#dumpTa").value="";
+  setFmt("corp"); syncModes(); drawPort(); draw();
+  RESTORING=false;
+  setSaved("ล้างข้อมูลที่บันทึกไว้แล้ว");
+});
+
+/* ================= ข้อมูลอ้างอิง: โมเดลพอร์ต + NAV รายกอง ================= */
+var REF={models:[],funds:[],err:[]}, FBY={};
+var ACBOX=null, ACROW=-1, ACLIST=[], ACSEL=-1;
+
+function refInfo(html){ const n=$("#modelInfo"); if(n) n.innerHTML=html||""; }
+
+function loadRef(fresh){
+  if(!GAS){ refInfo("หน้านี้ไม่ได้เปิดผ่าน Apps Script จึงยังดึงโมเดลและ NAV ไม่ได้"); return; }
+  refInfo("กำลังโหลดข้อมูลโมเดลและ NAV …");
+  const run = GAS.withSuccessHandler(onRef).withFailureHandler(function(e){
+    refInfo('<span class="loss">โหลดข้อมูลอ้างอิงไม่สำเร็จ: '+esc((e&&e.message)||e)+'</span>');
+  });
+  if(fresh) run.getRefFresh(); else run.getRefData();
+}
+
+function onRef(d){
+  REF = (d && d.models) ? d : {models:[],funds:[],err:["ข้อมูลว่าง"]};
+  if(!REF.funds) REF.funds=[];
+  if(!REF.err) REF.err=[];
+  FBY={};
+  REF.funds.forEach(function(f){ FBY[key(f.c)]=f; });
+
+  const sel=$("#modelPick"); if(!sel) return;
+  const g={}, order=[];
+  REF.models.forEach(function(m){
+    const k=m.m||"อื่น ๆ";
+    if(!g[k]){ g[k]=[]; order.push(k); }
+    g[k].push(m);
+  });
+  sel.innerHTML='<option value="">— เลือกโมเดลพอร์ต —</option>'+order.map(function(k){
+    return '<optgroup label="'+esc(k)+'">'+g[k].map(function(m){
+      return '<option value="'+esc(m.n)+'">'+esc(m.n)+' · '+m.i.length+' กอง</option>';
+    }).join("")+'</optgroup>';
+  }).join("");
+
+  const withNav=REF.funds.filter(function(f){ return +f.v>0; }).length;
+  refInfo("โมเดล "+f0(REF.models.length)+" ชุด · ฐานข้อมูลกองทุน "+f0(REF.funds.length)+" กอง (มี NAV "+f0(withNav)+" กอง)"
+    + (REF.err.length ? ' · <span class="loss">'+esc(REF.err.join(" / "))+'</span>' : ""));
+}
+
+/* ---------- ใช้สัดส่วนจากโมเดล ---------- */
+$("#applyModel").addEventListener("click",function(){
+  const name=$("#modelPick").value;
+  let m=null;
+  for(let i=0;i<REF.models.length;i++) if(REF.models[i].n===name){ m=REF.models[i]; break; }
+  if(!m){ showErr("ยังไม่ได้เลือกโมเดลพอร์ต"); return; }
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+
+  const wantAdd=$("#mAdd").checked, wantZero=$("#mZero").checked;
+  const idx={};
+  D.forEach(function(r,i){ const k=key(r.name); if(idx[k]==null) idx[k]=i; });
+
+  const used={}, added=[], missing=[];
+  m.i.forEach(function(it){
+    const code=it[0], w=+it[1]||0, k=key(code);
+    used[k]=1;
+    if(idx[k]!=null){ D[idx[k]].w=w; return; }
+    if(!wantAdd){ missing.push(code); return; }
+    const f=FBY[k]||{};
+    D.push(sane({name:code, amc:f.a||"", nav:+f.v||0, asOf:f.d||"", w:w}));
+    added.push(code);
+  });
+
+  const zeroed=[];
+  if(wantZero) D.forEach(function(r){ if(!used[key(r.name)] && ((+r.value>0)||(+r.w>0))){ r.w=0; zeroed.push(r.name); } });
+
+  PLAN=m.n;
+  drawPort(); draw();
+
+  let msg="ใช้สัดส่วน “"+m.n+"” แล้ว — "+f0(m.i.length)+" กอง";
+  if(added.length)   msg+=" · เพิ่มใหม่ "+f0(added.length)+" กอง ("+added.join(", ")+")";
+  if(missing.length) msg+=" · ยังไม่มีในพอร์ต "+f0(missing.length)+" กอง ("+missing.join(", ")+")";
+  if(zeroed.length)  msg+=" · ตั้งเป็น 0% "+f0(zeroed.length)+" กอง ("+zeroed.join(", ")+")";
+  if(m.d) msg+=" · โมเดลประกาศ "+m.d;
+  showErr(msg,true);
+});
+
+/* ---------- ดึง NAV ล่าสุดมาใส่ทุกแถว ---------- */
+$("#navSync").addEventListener("click",function(){
+  if(!D.length){ showErr("ยังไม่มีข้อมูลพอร์ต"); return; }
+  if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  let hit=0; const miss=[];
+  D.forEach(function(r){
+    const f=FBY[key(r.name)];
+    if(!f || !(+f.v>0)){ miss.push(r.name); return; }
+    r.nav=+f.v;
+    if(f.d) r.asOf=f.d;
+    if(!r.amc && f.a) r.amc=f.a;
+    const u=+r.units||0;
+    if(u>0) r.value=u*r.nav;          /* ไม่มีจำนวนหน่วยก็แก้มูลค่าให้ไม่ได้ */
+    hit++;
+  });
+  drawPort(); draw();
+  showErr("อัปเดต NAV แล้ว "+f0(hit)+" กอง"
+    + (miss.length ? " · ไม่พบราคาของ "+f0(miss.length)+" กอง ("+miss.join(", ")+")" : ""), hit>0);
+});
+
+$("#refReload").addEventListener("click",function(){ loadRef(true); });
+
+/* ---------- Autocomplete ช่องชื่อกองทุน ---------- */
+function acEnsure(){
+  if(ACBOX) return ACBOX;
+  ACBOX=document.createElement("div");
+  ACBOX.className="ac"; ACBOX.id="ac";
+  document.body.appendChild(ACBOX);
+  /* ใช้ mousedown เพราะ blur ของช่องกรอกจะสั่ง drawPort ทับก่อน click จะทำงาน */
+  ACBOX.addEventListener("mousedown",function(e){
+    const it=e.target.closest ? e.target.closest(".ac-i") : null;
+    if(!it) return;
+    e.preventDefault();
+    acPick(+it.dataset.k);
+  });
+  return ACBOX;
+}
+function acClose(){ if(ACBOX) ACBOX.style.display="none"; ACROW=-1; ACLIST=[]; ACSEL=-1; }
+
+function acSearch(q){
+  const Q=key(q); if(!Q) return [];
+  const UQ=String(q).toUpperCase();
+  const a=[],b=[],c=[];
+  for(let i=0;i<REF.funds.length;i++){
+    const f=REF.funds[i], k=key(f.c);
+    if(k.indexOf(Q)===0) a.push(f);
+    else if(k.indexOf(Q)>=0) b.push(f);
+    else if(f.n && String(f.n).toUpperCase().indexOf(UQ)>=0) c.push(f);
+  }
+  return a.concat(b,c).slice(0,12);
+}
+function acMark(text,q){
+  const s=String(text||""), i=s.toUpperCase().indexOf(String(q).toUpperCase());
+  if(i<0 || !q) return esc(s);
+  return esc(s.slice(0,i))+"<mark>"+esc(s.slice(i,i+q.length))+"</mark>"+esc(s.slice(i+q.length));
+}
+function acOpen(inp){
+  if(!REF.funds.length) return;
+  const q=String(inp.value||"").trim();
+  const box=acEnsure();
+  if(!q){ acClose(); return; }
+  ACLIST=acSearch(q);
+  ACROW=+inp.dataset.pi;
+  ACSEL=-1;
+  box.innerHTML = ACLIST.length ? ACLIST.map(function(f,i){
+    const nav = (+f.v>0) ? ("NAV "+fmt(f.v,4)+(f.d?" · "+esc(f.d):"")) : "ไม่มีราคาในฐานข้อมูล";
+    return '<div class="ac-i" data-k="'+i+'"><span class="r">'+nav+'</span>'
+      + '<b>'+acMark(f.c,q)+'</b>'
+      + '<span class="m">'+(f.n?acMark(f.n,q):"")+((f.n&&f.a)?" · ":"")+(f.a?esc(f.a):"")+'</span></div>';
+  }).join("") : '<div class="ac-none">ไม่พบกองที่ตรงกับ “'+esc(q)+'” — พิมพ์ชื่อเองต่อได้ ระบบไม่บังคับให้เลือกจากรายการ</div>';
+
+  const r=inp.getBoundingClientRect();
+  box.style.left=(r.left+window.pageXOffset)+"px";
+  box.style.top=(r.bottom+window.pageYOffset+4)+"px";
+  box.style.minWidth=Math.max(r.width,330)+"px";
+  box.style.display="block";
+}
+function acPick(i){
+  const f=ACLIST[i], row=ACROW;
+  if(!f || row<0 || !D[row]){ acClose(); return; }
+  D[row].name=f.c;
+  if(f.a) D[row].amc=f.a;
+  if(+f.v>0){
+    D[row].nav=+f.v;
+    if(f.d) D[row].asOf=f.d;
+    const u=+D[row].units||0;
+    if(u>0) D[row].value=u*D[row].nav;
+  }
+  acClose();
+  drawPort(); draw();
+}
+function acIsName(t){
+  return !!(t && t.tagName==="INPUT" && t.dataset && t.dataset.pf==="name" && t.closest && t.closest("#pt"));
+}
+/* ดัก input ในช่วง capture เพราะ handler เดิมของแต่ละช่องสั่ง drawPort ทันที
+   ทำให้ element เดิมถูกแทนที่ก่อนที่ event จะ bubble มาถึง document */
+document.addEventListener("input",function(e){ if(acIsName(e.target)) acOpen(e.target); },true);
+document.addEventListener("focusout",function(e){
+  if(!acIsName(e.target)) return;
+  setTimeout(function(){ if(!acIsName(document.activeElement)) acClose(); },0);
+},true);
+document.addEventListener("keydown",function(e){
+  if(!acIsName(e.target) || !ACBOX || ACBOX.style.display!=="block") return;
+  if(e.key==="Escape"){ acClose(); return; }
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    e.preventDefault();
+    const n=ACLIST.length; if(!n) return;
+    const down=(e.key==="ArrowDown");
+    ACSEL = (ACSEL<0) ? (down?0:n-1) : ((ACSEL+(down?1:-1)+n)%n);
+    $$("#ac .ac-i").forEach(function(node,i){ node.classList.toggle("on",i===ACSEL); });
+    const on=$("#ac .ac-i.on"); if(on) on.scrollIntoView({block:"nearest"});
+    return;
+  }
+  if(e.key==="Enter" && ACSEL>=0){ e.preventDefault(); acPick(ACSEL); }
+},true);
+window.addEventListener("scroll",acClose,true);
+window.addEventListener("resize",acClose);
+
+boot();
+loadRef(false);
+<\/script>
+</body>
+</html>
+</script>
 <script type="text/plain" id="navSeed" data-enc="gzip-base64" data-from="-365" data-to="2043" data-points="3813450" data-src="nav-history.bin"></script>
 <div class="toast" id="toast"></div>
 
@@ -1815,9 +2956,7 @@ function mountFreeTabs(){
   if(host && !host.children.length){ host.appendChild(cardNewsSearch()); renderNewsSearch(); }
   setTimeout(mountFootnotes,0);
   if(!A){
-    if(p7 && !p7.children.length) p7.appendChild(emptyCard("ปรับสมดุลพอร์ต",
-      "เครื่องคำนวณนี้ต้องมีพอร์ตก่อน — นำเข้าข้อมูลพอร์ตปัจจุบันในแท็บที่ 1 · ถ้าต้องการกรอกพอร์ตเองโดยไม่ใช้ statement ให้เปิดไฟล์ rebalance-tool.html ซึ่งแยกไว้ต่างหาก",
-      "", null));
+    if(p7 && !p7.children.length){ p7.appendChild(cardRebal(null)); renderRebal(); }
     if(p9 && !p9.children.length) p9.appendChild(emptyCard("Fixed พอร์ต",
       "ตารางแผนปรับพอร์ตดึงจากพอร์ตปัจจุบัน — นำเข้าข้อมูลพอร์ตในแท็บที่ 1 ก่อน", "", null));
   }
@@ -5497,6 +6636,17 @@ function renderViews(){
    แท็บ 7 · ปรับสมดุลพอร์ต
    ============================================================ */
 let REBAL_TARGET=new Map(), REBAL_MODE="topup", REBAL_AMT=0, REBAL_ROUND=false, REBAL_STEP=0;
+/* มูลค่ารายกอง ณ ปัจจุบัน — ใช้ NAV ที่กรอกในตารางพอร์ตก่อน ไม่มีจึงใช้ NAV ล่าสุดที่มี
+   แท็บ Fixed พอร์ตและส่วนสรุปต่าง ๆ เรียกใช้ตัวนี้ */
+function rbVals(){
+  if(!A) return [];
+  const byIdx=new Map([...document.querySelectorAll("#holdTable tbody tr:not(.cash-row)")]
+    .map(r=>[+r.dataset.i, parseFloat((r.querySelector("input.nav")||{}).value)||0]));
+  return A.holdings.map((f,i)=>{
+    const nav = byIdx.has(i) ? byIdx.get(i) : navNowOf(f.name);
+    return {f, nav, v:(+f.units||0)*(nav||0)};
+  }).filter(x=>x.v>0.5 || (x.f.units||0)>HELD_MIN);
+}
 const STEP_LADDER=[10000,5000,1000,500,100];
 /* ถอนออกโดยห้ามซื้อเพิ่ม: หาค่า λ ที่ทำให้มูลค่าคงเหลือของแต่ละกอง = min(มูลค่าเดิม, λ × น้ำหนักโมเดล)
    แล้วผลรวมเท่ากับมูลค่าพอร์ตหลังถอน — กองที่ล้นเป้าจะโดนขายก่อน กองที่ต่ำกว่าเป้าไม่ถูกแตะ */
@@ -5558,270 +6708,101 @@ function roundPlan(diffs, values, step, targetSum){
   return {out:r.map(x=>x*step), sum:k*step};
 }
 function cardRebal(a){
-  const c=card("เครื่องคำนวณปรับสมดุลพอร์ต","กรอกสัดส่วนโมเดล เลือกวิธีปรับ แล้วดูรายการที่ต้องทำ");
+  const c=card("ปรับสมดุลพอร์ต",
+    "ดึงพอร์ตจากข้อมูลที่นำเข้าไว้ หรือกรอกเองก็ได้ · แผนที่ทำไว้จะถูกจำไว้ในเครื่องอัตโนมัติ");
 
-  const modes=[
-    ["topup","เติมเงินเพื่อปรับ","เอาเงินใหม่เติมกองที่ต่ำกว่าเป้าก่อน ไม่ขายของเดิม ไม่มีค่าธรรมเนียมขายและไม่รับรู้กำไรขาดทุน"],
-    ["sell","ปรับสมดุลอย่างเดียว","ไม่เติมเงินใหม่ ขายกองที่เกินเป้าไปซื้อกองที่ขาด ใช้เงินในพอร์ตเท่าเดิม"],
-    ["both","เติมเงินและขายพร้อมกัน","เติมเงินใหม่ด้วย ขายกองที่เกินเป้าด้วย ให้ทุกกองตรงสัดส่วนโมเดลพอดี"],
-    ["withdraw","ถอนเงินและปรับสมดุล","ถอนเงินออกตามจำนวนที่ระบุ แล้วจัดสัดส่วนที่เหลือให้ตรงโมเดล"],
-    ["cashout","ถอนออกไปใช้ (ขายอย่างเดียว)","ถอนเงินออกโดยไม่ซื้อกองใดเพิ่ม เลือกขายกองที่เกินสัดส่วนโมเดลก่อน"]
-  ];
-  const mb=el("div","modes3"); mb.id="rbModes";
-  mb.innerHTML=modes.map(([k,t,d])=>`<button type="button" class="modebox${k===REBAL_MODE?" on":""}" data-mode="${k}">
-      <strong>${esc(t)}</strong><small>${esc(d)}</small></button>`).join("");
-  c.appendChild(mb);
-
-  const amt=el("div"); amt.id="rbAmtWrap"; amt.style.margin="16px 0 4px";
-  amt.innerHTML=`<label class="f" id="rbAmtLabel" for="rbAmt">เงินที่จะเติมเพิ่ม (บาท)</label>
-    <div class="stack" style="margin-top:0">
-      <input class="f" id="rbAmt" type="text" inputmode="decimal" autocomplete="off" value="0" style="width:180px">
-      <button class="btn sm" data-add="50000">+50,000</button>
-      <button class="btn sm" data-add="100000">+100,000</button>
-      <button class="btn sm" data-add="500000">+500,000</button>
-      <button class="btn sm quiet" id="rbClearAmt">ล้าง</button>
-      <button class="btn sm" id="rbMinTop">เติมขั้นต่ำที่ไม่ต้องขาย</button>
-    </div>`;
-  c.appendChild(amt);
-
-  const bar=el("div","stack no-print"); bar.style.marginTop="14px";
-  bar.innerHTML=`<span style="font-size:12.5px;color:var(--muted);margin-right:4px">สัดส่วนโมเดล:</span>
-    <button class="btn sm" id="rbEqual">แบ่งเท่ากันทุกกอง</button>
-    <button class="btn sm" id="rbCurrent">ใช้สัดส่วนปัจจุบัน</button>
-    <button class="btn sm" id="rbNorm">ปรับให้ครบ 100%</button>
-    <span style="width:14px"></span>
-    <select id="rbModel" style="min-width:270px"></select>
-    <label class="wrow" style="margin:0"><input type="checkbox" id="rbAddMissing" checked style="width:auto">
-      <span style="font-size:12.5px;color:var(--muted)">เพิ่มกองที่ขาด</span></label>
-    <span style="width:14px"></span>
-    <button class="btn sm toggle" id="rbRound" type="button" aria-pressed="false">ปัดยอดเป็นตัวเลขกลม</button>
-    <span style="flex:1"></span>`;
+  const bar=el("div","stack no-print"); bar.style.marginTop="0";
+  bar.innerHTML=`<button class="btn amber" id="rbPull">ดึงพอร์ตจากข้อมูลที่นำเข้า</button>
+    <button class="btn quiet" id="rbBlank">เริ่มใหม่เป็นตารางเปล่า</button>
+    <span class="foot" id="rbPullMsg" style="margin:0"></span>`;
   c.appendChild(bar);
 
-  const wrap=el("div","wrap"); wrap.style.marginTop="14px";
-  wrap.innerHTML=`<table id="rbTable"><thead><tr>
-    <th class="l">กองทุน</th><th class="l">สินทรัพย์หลัก</th><th>มูลค่าปัจจุบัน</th><th>%ปัจจุบัน</th>
-    <th class="c">%โมเดล</th><th>มูลค่าเป้าหมาย</th><th>ต้องซื้อ/ขาย</th><th class="c">รายการที่ต้องทำ</th>
-  </tr></thead><tbody></tbody><tfoot></tfoot></table>`;
-  c.appendChild(wrap);
-  const warn=el("div"); warn.id="rbWarn"; c.appendChild(warn);
-  const sum=el("div"); sum.id="rbSum"; sum.style.marginTop="18px"; sum.style.maxWidth="540px";
-  c.appendChild(sum);
-  const plan=el("div"); plan.id="rbPlan"; plan.style.marginTop="20px";
-  c.appendChild(plan);
-  c.appendChild(el("p","foot","คำนวณจากมูลค่าปัจจุบันในแท็บพอร์ตและรายกอง · ยอดซื้อขายเป็นค่าประมาณก่อนค่าธรรมเนียมและ NAV ที่จะเปลี่ยนในวันทำรายการ · สัดส่วนโมเดลที่ตั้งไว้จะถูกใช้ร่างข้อความในแท็บมุมมองการลงทุนด้วย")).style.marginTop="14px";
+  const host=el("div"); host.id="rbHost"; host.style.marginTop="14px";
+  host.innerHTML=`<iframe id="rbFrame" title="เครื่องคำนวณปรับสมดุลพอร์ต"
+    style="width:100%;border:0;display:block;min-height:600px"></iframe>`;
+  c.appendChild(host);
   return c;
 }
-function rbVals(){
-  const out=[];
-  $$("#holdTable tbody tr:not(.cash-row)").forEach(tr=>{
-    const f=A.holdings[+tr.dataset.i];
-    const nav=parseFloat(tr.querySelector("input.nav").value)||0;
-    out.push({f, v:f.units*nav, nav});
+/* ---------- สะพานเชื่อมกับเครื่องมือที่ฝังไว้ ---------- */
+let RB_READY=false;
+function rbWin(){ const f=$("#rbFrame"); return f && f.contentWindow; }
+function rbMount(){
+  const f=$("#rbFrame"); if(!f || f.dataset.on) return;
+  f.dataset.on="1";
+  const src=document.getElementById("rb7src");
+  if(!src){ $("#rbPullMsg").textContent="ไม่พบตัวเครื่องคำนวณในไฟล์"; return; }
+  f.srcdoc=src.textContent.replace(/<\\\/script>/g,"<\/script>");
+  f.addEventListener("load",()=>{
+    RB_READY=true;
+    rbAutoHeight();
+    if(A && !rbHasRows()) rbPull(true);
   });
-  return out;
 }
-/* เงินเติมขั้นต่ำที่ทำให้ไม่ต้องขายกองใด = ยอดที่ทำให้กองที่เกินเป้าที่สุดพอดีกับเป้า */
-function minTopUp(rows, cur, wsum){
-  let need=0;
-  rows.forEach(x=>{
-    const w=(+REBAL_TARGET.get(fundKey(x.f.name))||0)/ (wsum||1);
-    if(w>0) need=Math.max(need, x.v/w);
-  });
-  return Math.max(0, need-cur);
+/* ปรับความสูงตามเนื้อหา ไม่ให้มีแถบเลื่อนซ้อนในหน้า */
+function rbAutoHeight(){
+  const f=$("#rbFrame"), w=rbWin(); if(!f||!w||!w.document.body) return;
+  const fit=()=>{ try{
+      const h=Math.max(w.document.body.scrollHeight, w.document.documentElement.scrollHeight);
+      if(h>200) f.style.height=(h+24)+"px";
+    }catch(e){} };
+  fit();
+  if(w.ResizeObserver){
+    const ro=new w.ResizeObserver(fit);
+    ro.observe(w.document.body);
+  } else setInterval(fit,700);
+  w.addEventListener("click",()=>setTimeout(fit,120));
+  w.addEventListener("input",()=>setTimeout(fit,120));
+}
+const rbHasRows = () => { const w=rbWin(); try{ return !!(w && w.D && w.D.length); }catch(e){ return false; } };
+/* แปลงพอร์ตในไฟล์หลักให้เป็นรูปแบบที่เครื่องคำนวณเข้าใจ */
+function rbRows(){
+  if(!A) return [];
+  const tr=[...document.querySelectorAll("#holdTable tbody tr:not(.cash-row)")];
+  const byIdx=new Map(tr.map(r=>[+r.dataset.i, parseFloat((r.querySelector("input.nav")||{}).value)||0]));
+  return A.holdings.map((f,i)=>{
+    const nav=byIdx.has(i)?byIdx.get(i):navNowOf(f.name);
+    const fm=fmapOf(f.name);
+    return {
+      name:f.name,
+      amc:(fm&&fm.amc)?fm.amc:"",
+      units:+f.units||0,
+      navCost:(f.units>0)?f.cost/f.units:0,
+      cost:+f.cost||0,
+      nav:nav||0,
+      value:(+f.units||0)*(nav||0),
+      asOf:(()=>{ const o=NAVH.map&&NAVH.map.get(fundKey(f.name));
+        return (o&&o.pts.length)?thDate(o.pts[o.pts.length-1].d):""; })(),
+      w:0
+    };
+  }).filter(r=>r.units>HELD_MIN || r.value>0.5);
+}
+function rbPull(quiet){
+  const w=rbWin(), msg=$("#rbPullMsg");
+  if(!w || !w.applyState){ if(msg) msg.textContent="เครื่องคำนวณยังโหลดไม่เสร็จ ลองอีกครั้ง"; return; }
+  const rows=rbRows();
+  if(!rows.length){ if(msg) msg.textContent="ยังไม่มีพอร์ตให้ดึง — นำเข้าข้อมูลในแท็บที่ 1 ก่อน"; return; }
+  const cash=(!A.portfolioOnly && A.cash && A.cash.length) ? cashAt(A,new Date()) : 0;
+  try{
+    w.applyState({rows, fmt:"std", mode:"topup", amt:0, round:false, plan:""});
+    if(w.$ && w.$("#wCurrent")) w.$("#wCurrent").click();   /* ตั้งสัดส่วนโมเดลจากพอร์ตปัจจุบันเป็นค่าเริ่มต้น */
+    setTimeout(rbAutoHeight,200);
+    if(msg) msg.textContent=`ดึงมาแล้ว ${fmt0(rows.length)} กอง · มูลค่ารวม ${fmt(rows.reduce((s,r)=>s+r.value,0))} บาท`
+      + (cash>0.5?` · ยังมีเงินสดรอลงทุนอีก ${fmt0(cash)} บาทที่ไม่ได้ดึงมา ให้ใส่เป็นเงินเติมเพิ่มแทน`:"");
+  }catch(e){ if(msg) msg.textContent="ดึงข้อมูลไม่สำเร็จ: "+(e.message||e); }
 }
 function renderRebal(){
-  const tb=$("#rbTable tbody"); if(!tb||!A) return;
-  /* จำช่องที่กำลังพิมพ์อยู่ เพื่อไม่ให้การวาดใหม่ดีดเคอร์เซอร์ */
-  const ae=document.activeElement;
-  const fk = (ae && ae.classList && ae.classList.contains("rb-w") && ae.closest("tr")) ? ae.closest("tr").dataset.k : null;
-  const fv = fk ? ae.value : null;
-  let fs=null, fe=null;
-  if(fk){ try{ fs=ae.selectionStart; fe=ae.selectionEnd; }catch(e){} }
-  const rows=rbVals(), cur=rows.reduce((s,x)=>s+x.v,0);
-  const amtEl=$("#rbAmt"); REBAL_AMT=Math.max(0,parseFloat(String(amtEl?amtEl.value:0).replace(/,/g,""))||0);
-  if(!REBAL_TARGET.size) rows.forEach(x=>REBAL_TARGET.set(fundKey(x.f.name), cur>0? x.v/cur*100 : 0));
-  let wsum=0; rows.forEach(x=>wsum+=(+REBAL_TARGET.get(fundKey(x.f.name))||0));
-
-  const mode=REBAL_MODE;
-  
-  const flow = mode==="topup"||mode==="both" ? REBAL_AMT
-             : ((mode==="withdraw"||mode==="cashout") ? -REBAL_AMT : 0);
-  const target = cur + flow;
-  const ideal = k => wsum>0 ? target*((+REBAL_TARGET.get(k)||0)/wsum) : 0;
-
-  /* ยอดซื้อขายก่อนปัดเศษ */
-  let raw;
-  if(mode==="cashout"){
-    /* ถอนออกไปใช้ ขายอย่างเดียวไม่ซื้อเพิ่ม แต่เลือกขายกองที่ล้นเป้าก่อนเพื่อเข้าใกล้สัดส่วนโมเดล */
-    raw=sellOnlyPlan(rows.map(x=>x.v), rows.map(x=>+REBAL_TARGET.get(fundKey(x.f.name))||0), REBAL_AMT);
-  } else if(mode==="topup"){
-    const gaps=rows.map(x=>Math.max(0, ideal(fundKey(x.f.name))-x.v));
-    const gsum=gaps.reduce((a,b)=>a+b,0);
-    raw=gaps.map(g=> gsum>0 ? REBAL_AMT*(g/gsum) : 0);
-  } else {
-    raw=rows.map(x=> ideal(fundKey(x.f.name))-x.v);
-  }
-  const rawSum=raw.reduce((a,b)=>a+b,0);
-  /* วัดความคลาดจาก "แผนก่อนปัดเศษ" ไม่ใช่จากโมเดล เพราะบางโหมดเข้าโมเดลไม่ได้อยู่แล้ว */
-  const idealAfter=rows.map((x,i)=>x.v+raw[i]);
-  const idealSum=idealAfter.reduce((a,b)=>a+b,0)||1;
-  const modelPct=idealAfter.map(v=>v/idealSum*100);
-  REBAL_STEP = REBAL_ROUND ? pickStep(raw, rows.map(x=>x.v), rawSum, modelPct, 1) : 0;
-  const rr=roundPlan(raw, rows.map(x=>x.v), REBAL_STEP, rawSum);
-  const plan=rr.out;
-  const planIdx=new Map(rows.map((x,i)=>[fundKey(x.f.name), i]));
-  const planOf=(k)=>plan[planIdx.get(k)]||0;
-
-  tb.innerHTML="";
-  rows.forEach(x=>{
-    const k=fundKey(x.f.name), w=+REBAL_TARGET.get(k)||0;
-    const diff = planOf(k);
-    const tv = x.v + diff;
-    const cl=classify(x.f.name);
-    const tr=el("tr"); tr.dataset.k=k;
-    tr.innerHTML=`<td class="l"><strong>${esc(x.f.name)}</strong></td>
-      <td class="l" style="font-size:12.5px;color:var(--muted)">${esc(cl.main)}</td>
-      <td class="num">${fmt(x.v)}</td>
-      <td class="num">${cur>0?pct(x.v/cur):"–"}</td>
-      <td class="c"><input class="nav rb-w" type="text" inputmode="decimal" autocomplete="off" value="${k===fk?esc(fv):w.toFixed(1)}"></td>
-      <td class="num">${fmt(tv)}</td>
-      <td class="num ${cls(diff)}">${Math.abs(diff)<1?"–":sign(diff)}</td>
-      <td class="c">${Math.abs(diff)<1?'<span class="pill gone">คงไว้</span>':(diff>0?`<span class="pill ok">ซื้อ ${fmt0(diff)}</span>`:`<span class="pill bad">ขาย ${fmt0(-diff)}</span>`)}</td>`;
-    tb.appendChild(tr);
-  });
-  const buy=plan.reduce((s,d)=>s+Math.max(0,d),0);
-  const sell=plan.reduce((s,d)=>s+Math.max(0,-d),0);
-  const after=rows.map((x,i)=>x.v+plan[i]);
-  const afterSum=after.reduce((a,b)=>a+b,0)||1;
-  let maxDev=0;
-  rows.forEach((x,i)=>{ maxDev=Math.max(maxDev, Math.abs(after[i]/afterSum*100 - modelPct[i])); });
-  $("#rbTable tfoot").innerHTML=`<tr><td class="l">รวม</td><td></td><td class="num">${fmt(cur)}</td><td class="num">100.00%</td>
-    <td class="c num">${wsum.toFixed(1)}%</td><td class="num">${fmt(mode==="topup"?cur+REBAL_AMT:target)}</td>
-    <td class="num">${sign(buy-sell)}</td><td></td></tr>`;
-
-  const wn=$("#rbWarn");
-  wn.innerHTML = Math.abs(wsum-100)<0.05 ? "" :
-    `<div class="msg" style="margin-top:12px">สัดส่วนโมเดลรวมได้ ${wsum.toFixed(1)}% ไม่ใช่ 100% — ระบบเกลี่ยตามสัดส่วนให้ชั่วคราว กด “ปรับให้ครบ 100%” เพื่อแก้</div>`;
-
-  const need = minTopUp(rows, cur, wsum);
-  const devTxt = REBAL_STEP
-    ? `<div class="sum-row sub"><span>ปัดยอดทีละ ${fmt0(REBAL_STEP)} บาท · คลาดจากแผนก่อนปัด</span><b class="num ${maxDev>2?"loss":"gain"}">${maxDev.toFixed(2)} จุด</b></div>`
-    : "";
-  $("#rbSum").innerHTML=`
-    <div class="sum-row"><span>มูลค่าพอร์ตปัจจุบัน</span><b class="num">${fmt(cur)}</b></div>
-    <div class="sum-row"><span>${(mode==="withdraw"||mode==="cashout")?"เงินที่ถอนออก":"เงินที่เติมเข้า"}</span><b class="num ${cls(flow)}">${flow?sign(flow):"–"}</b></div>
-    <div class="sum-row"><span>ต้องซื้อรวม</span><b class="num gain">${fmt(buy)}</b></div>
-    <div class="sum-row"><span>ต้องขายรวม</span><b class="num loss">${fmt(sell)}</b></div>
-    <div class="sum-row total"><span>มูลค่าพอร์ตหลังปรับ</span><b class="num">${fmt(mode==="topup"?cur+REBAL_AMT:target)}</b></div>
-    <div class="sum-row sub"><span>เงินเติมขั้นต่ำที่จะไม่ต้องขายกองใดเลย</span><b class="num">${fmt(need)}</b></div>
-    ${devTxt}`;
-
-  /* รายการที่ต้องทำ */
-  const acts=rows.map((x,i)=>({name:x.f.name, d:plan[i]}))
-    .filter(o=>Math.abs(o.d)>=1).sort((a,b)=>b.d-a.d);
-  $("#rbPlan").innerHTML = acts.length ? `<div class="eyebrow">รายการที่ต้องทำ</div>
-    <div class="wrap"><table><thead><tr><th class="c">ลำดับ</th><th class="l">รายการ</th><th>จำนวนเงิน</th></tr></thead><tbody>${
-      acts.map((o,i)=>`<tr><td class="c num">${i+1}</td>
-        <td class="l">${o.d>0?"ซื้อ":"ขาย"} <strong>${esc(o.name)}</strong></td>
-        <td class="num ${cls(o.d)}">${fmt(Math.abs(o.d))}</td></tr>`).join("")}</tbody></table></div>`
-    : `<p class="foot">พอร์ตตรงกับสัดส่วนโมเดลแล้ว ไม่ต้องทำรายการใด</p>`;
-
-  if(!$("#rbAmt").dataset.w){
-    $("#rbAmt").dataset.w="1";
-    $("#rbAmt").addEventListener("input",renderRebal);
-    $$("#rbAmtWrap [data-add]").forEach(b=>b.addEventListener("click",()=>{
-      $("#rbAmt").value=(parseFloat($("#rbAmt").value)||0)+(+b.dataset.add); renderRebal();
-    }));
-    $("#rbClearAmt").addEventListener("click",()=>{ $("#rbAmt").value=0; renderRebal(); });
-    $("#rbMinTop").addEventListener("click",()=>{
-      const r=rbVals(), c2=r.reduce((s,x)=>s+x.v,0); let ws=0; r.forEach(x=>ws+=(+REBAL_TARGET.get(fundKey(x.f.name))||0));
-      $("#rbAmt").value=Math.ceil(minTopUp(r,c2,ws)); REBAL_MODE="topup"; syncModes(); renderRebal();
+  rbMount();
+  const p=$("#rbPull"), b=$("#rbBlank");
+  if(p && !p.dataset.w){
+    p.dataset.w="1";
+    p.addEventListener("click",()=>rbPull(false));
+    b.addEventListener("click",()=>{
+      const w=rbWin();
+      if(w && w.applyState){ w.applyState({rows:[], fmt:"corp", mode:"topup", amt:0, round:false, plan:""});
+        $("#rbPullMsg").textContent="ล้างตารางแล้ว กรอกเองได้เลย"; setTimeout(rbAutoHeight,200); }
     });
-    $("#rbEqual").addEventListener("click",()=>{ const n=rows.length||1; rows.forEach(x=>REBAL_TARGET.set(fundKey(x.f.name),100/n)); renderRebal(); renderViews(); });
-    $("#rbCurrent").addEventListener("click",()=>{ rows.forEach(x=>REBAL_TARGET.set(fundKey(x.f.name), cur>0?x.v/cur*100:0)); renderRebal(); renderViews(); });
-    $("#rbNorm").addEventListener("click",()=>{ if(wsum>0) rows.forEach(x=>{const k=fundKey(x.f.name);REBAL_TARGET.set(k,(+REBAL_TARGET.get(k)||0)/wsum*100);}); renderRebal(); renderViews(); });
-    $$("#rbModes .modebox").forEach(b=>b.addEventListener("click",()=>{ REBAL_MODE=b.dataset.mode; syncModes(); renderRebal(); }));
-    $("#rbModel").addEventListener("change",e=>{ if(e.target.value) applyModelWeights(e.target.value); });
-    $("#rbRound").addEventListener("click",()=>{ REBAL_ROUND=!REBAL_ROUND; renderRebal(); });
-    syncModes();
-  }
-  const rbt=$("#rbRound"); if(rbt) rbt.setAttribute("aria-pressed", REBAL_ROUND?"true":"false");
-  fillRbModel();
-  $$("#rbTable input.rb-w").forEach(i=>{ i.disabled=false; i.style.opacity=""; });
-  ["rbEqual","rbCurrent","rbNorm"].forEach(id=>{ const b=$("#"+id); if(b) b.disabled=false; });
-  tb.querySelectorAll("input.rb-w").forEach(inp=>{
-    inp.addEventListener("input",e=>{
-      REBAL_TARGET.set(e.target.closest("tr").dataset.k, parseFloat(e.target.value)||0);
-      renderRebal();
-    });
-    inp.addEventListener("blur",()=>renderRebal());
-    inp.addEventListener("keydown",e=>{
-      if(e.key!=="ArrowUp"&&e.key!=="ArrowDown") return;
-      e.preventDefault();
-      const k2=e.target.closest("tr").dataset.k;
-      const step=e.shiftKey?5:(e.altKey?0.1:1);
-      REBAL_TARGET.set(k2, Math.max(0,(+REBAL_TARGET.get(k2)||0)+(e.key==="ArrowUp"?step:-step)));
-      e.target.value=(+REBAL_TARGET.get(k2)).toFixed(1);
-      renderRebal();
-    });
-  });
-  if(fk){
-    let inp=null;
-    tb.querySelectorAll("tr").forEach(r=>{ if(r.dataset.k===fk && !inp) inp=r.querySelector("input.rb-w"); });
-    if(inp){ inp.focus(); try{ inp.setSelectionRange(fs,fe); }catch(e){} }
   }
 }
-function fillRbModel(){
-  const ms=$("#rbModel"); if(!ms) return;
-  if(ms.dataset.n===String(PALLOC.size) && ms.options.length) return;
-  ms.dataset.n=String(PALLOC.size);
-  if(!PALLOC.size){ ms.innerHTML=`<option value="">— ยังไม่ได้ดึงโมเดลพอร์ตจากชีต —</option>`; return; }
-  let h=`<option value="">— ดึงสัดส่วนจากโมเดลพอร์ต —</option>`;
-  planGroups().forEach((list,grp)=>{
-    h+=`<optgroup label="${esc(grp)}">`;
-    list.forEach(p=>h+=`<option value="${esc(p.name)}">${esc(planShort(p.name))} · ${fmt0(p.funds.length)} กอง</option>`);
-    h+=`</optgroup>`;
-  });
-  ms.innerHTML=h;
-}
-/* ดึงสัดส่วนจากโมเดล — กองที่ไม่มีในโมเดลได้ 0% กองที่ขาดเพิ่มเข้าตารางด้วยมูลค่า 0 */
-function applyModelWeights(planName){
-  const p=PALLOC.get(planName); if(!p||!A) return;
-  const want=new Map(p.funds.map(f=>[fundKey(f.code),{code:f.code,w:+f.w||0}]));
-  const have=new Set(A.holdings.map(f=>fundKey(f.name)));
-  REBAL_TARGET=new Map();
-  A.holdings.forEach(f=>{
-    const k=fundKey(f.name);
-    REBAL_TARGET.set(k, want.has(k)? want.get(k).w : 0);
-  });
-  const add=[], addMissing=($("#rbAddMissing")||{}).checked;
-  want.forEach((v,k)=>{ if(!have.has(k)) add.push(v); });
-  if(addMissing && add.length){
-    add.forEach(v=>{
-      A.holdings.push({name:v.code, units:0, cost:0, pl:0, first:null, last:null, _added:true});
-      REBAL_TARGET.set(fundKey(v.code), v.w);
-    });
-    render(A);
-  } else {
-    renderRebal();
-  }
-  const drop=A.holdings.filter(f=>!want.has(fundKey(f.name)) && (f.units>HELD_MIN)).length;
-  const msg=[`ดึงสัดส่วนจาก ${planShort(planName)} แล้ว`];
-  if(addMissing && add.length) msg.push(`เพิ่มกองที่ขาด ${fmt0(add.length)} กอง (มูลค่า 0 รอซื้อ)`);
-  else if(add.length) msg.push(`โมเดลมีอีก ${fmt0(add.length)} กองที่พอร์ตยังไม่มี — ติ๊ก “เพิ่มกองที่ขาด” เพื่อดึงเข้ามา`);
-  if(drop) msg.push(`${fmt0(drop)} กองในพอร์ตไม่อยู่ในโมเดล จึงตั้งเป็น 0% (ขายออกทั้งหมด)`);
-  toast(msg.join(" · "));
-}
-function syncModes(){
-  $$("#rbModes .modebox").forEach(b=>b.classList.toggle("on", b.dataset.mode===REBAL_MODE));
-  const wrap=$("#rbAmtWrap"), lab=$("#rbAmtLabel");
-  if(!wrap) return;
-  wrap.hidden = REBAL_MODE==="sell";
-  if(lab) lab.textContent = (REBAL_MODE==="withdraw"||REBAL_MODE==="cashout") ? "เงินที่จะถอนออก (บาท)" : "เงินที่จะเติมเพิ่ม (บาท)";
-  const mt=$("#rbMinTop"); if(mt) mt.hidden = REBAL_MODE!=="topup";
-}
-
 /* ---------- ร่างข้อความมุมมองอัตโนมัติ ---------- */
 function modelWeight(k){
   const w = REBAL_TARGET.get(k);
@@ -6439,7 +7420,8 @@ function renderFixed(){
         else { n.classList.add("print-off"); n.style.setProperty("display","none","important"); }
       });
       updatePrintHead();
-      setTimeout(()=>{ window.print(); setTimeout(restoreAfterPrint,400); },60);
+      rbAutoHeight();
+      setTimeout(()=>{ window.print(); setTimeout(restoreAfterPrint,400); },120);
     });
   }
   renderImpact();
