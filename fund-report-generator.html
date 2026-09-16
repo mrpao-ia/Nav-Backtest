@@ -2552,6 +2552,28 @@ function unitsAt(done,T){
   });
   return U;
 }
+/* เงินสดค้างมานานเท่าไร — นับจากวันที่ยอดคงเหลือขยับขึ้นครั้งล่าสุดแล้วไม่ลดลงอีก */
+function cashIdleSince(a){
+  const arr=a&&a.cash; if(!arr||!arr.length) return null;
+  const now=arr[arr.length-1].bal;
+  if(now<=0.5) return null;
+  let since=arr[arr.length-1].d;
+  for(let i=arr.length-1;i>=0;i--){
+    if(arr[i].bal<now-0.5) break;       /* ก่อนหน้านี้ยอดต่ำกว่าปัจจุบัน แปลว่าเพิ่งขึ้นมา */
+    since=arr[i].d;
+  }
+  return since;
+}
+/* ข้อมูลเงินสดสำหรับอธิบายลูกค้า — บอกสัดส่วนและระยะเวลาที่ค้าง
+   ไม่คำนวณว่าฉุดผลตอบแทนกี่จุด เพราะต้องรู้ว่าถ้าลงทุนต่อจะได้เท่าไร ซึ่งไม่มีทางรู้ */
+function cashInfo(a, fundVal){
+  const idle = (a && !a.portfolioOnly && a.cash && a.cash.length) ? cashAt(a,new Date()) : 0;
+  if(!(idle>0.5)) return null;
+  const since=cashIdleSince(a);
+  const days = since ? Math.max(0,Math.round((Date.now()-since)/86400000)) : null;
+  const tot=(fundVal||0)+idle;
+  return {idle, since, days, share: tot>0 ? idle/tot : 0, stale: days!=null && days>30};
+}
 function cashAt(a,T){
   const arr=a.cash; if(!arr||!arr.length) return 0;
   let lo=0,hi=arr.length-1,best=0;
@@ -3267,6 +3289,16 @@ function navSyncBox(){
     ${S.msg?`<br>${esc(S.msg)}`:""}
     <br>ลองกดปุ่ม “ดึง NAV ล่าสุดจากชีต” ในตั้งค่าขั้นสูง หรือแจ้งผู้ดูแลระบบ</div>`;
 }
+/* เตือนเรื่องเงินสดค้างในแท็บภาพรวม — ที่ปรึกษาเห็นก่อนเปิดรายงานลูกค้า */
+function cashWarnBox(){
+  if(!A) return "";
+  const fundVal=rbVals().reduce((s,x)=>s+x.v,0);
+  const ci=cashInfo(A,fundVal);
+  if(!ci || !ci.stale) return "";
+  return `<div class="msg" style="margin:0 0 14px"><strong>เงินสดค้างในพอร์ตมานาน</strong> —
+    ${fmt(ci.idle)} บาท คิดเป็น ${pct(ci.share)} ของพอร์ต ไม่ได้ลงทุนต่อมาแล้ว ${fmt0(ci.days)} วัน${ci.since?` ตั้งแต่ ${thDate(ci.since)}`:""}<br>
+    เงินก้อนนี้ถูกนับรวมในมูลค่าพอร์ตและฉุด TWR ลง · ถ้าลูกค้าถอนออกไปแล้วให้บันทึกเป็นรายการถอนในแท็บที่ 1</div>`;
+}
 function renderNavCover(){
   const box=$("#navCover"); if(!box||!A) return;
   if(!NAVH.map){ box.innerHTML=""; return; }
@@ -3280,9 +3312,9 @@ function renderNavCover(){
       if(days>7) bad.push({name, from:o.pts[0].d, days});
     }
   });
-  if(!bad.length){ box.innerHTML=sync; return; }
+  if(!bad.length){ box.innerHTML=sync+cashWarnBox(); return; }
   const miss=bad.filter(b=>b.miss), late=bad.filter(b=>!b.miss).sort((a,b)=>b.days-a.days);
-  box.innerHTML=sync+`<div class="msg" style="margin:0 0 14px">
+  box.innerHTML=sync+cashWarnBox()+`<div class="msg" style="margin:0 0 14px">
     <strong>ชุด NAV ไม่ครอบคลุมช่วงที่ถือครบทุกกอง</strong> — มูลค่าพอร์ตช่วงต้นจึงเป็นค่าประมาณ และผลตอบแทนย้อนหลังยาว ๆ อาจต่ำหรือสูงกว่าความจริง
     ${late.length?`<div style="margin-top:6px">${late.slice(0,6).map(b=>`${esc(b.name)} — NAV เริ่ม ${thDate(b.from)} ช้ากว่าที่ซื้อ ${fmt0(b.days)} วัน`).join("<br>")}${late.length>6?`<br>และอีก ${fmt0(late.length-6)} กอง`:""}</div>`:""}
     ${miss.length?`<div style="margin-top:6px">ไม่มี NAV เลย: ${miss.slice(0,6).map(b=>esc(b.name)).join(", ")}${miss.length>6?` และอีก ${fmt0(miss.length-6)} กอง`:""}</div>`:""}
@@ -6975,9 +7007,10 @@ function wAvgReturn(rows, total, def){
   if(cov<=0) return null;
   return {r:num/cov, cover: total>0? cov/total : 0};
 }
-function reportHeader(rows, total, groups){
+function reportHeader(rows, total, groups, idle){
   const m=meta();
-  const cost=rows.reduce((s,x)=>s+(x.f._cash?x.v:x.f.cost),0), pl=total-cost;
+  const cost=rows.reduce((s,x)=>s+x.f.cost,0), pl=total-cost;
+  idle=+idle||0;
   const ns=navSpan();
   const subCount=new Set(); groups.forEach(g=>g.subs.forEach((v,k)=>subCount.add(g.name+"|"+k)));
   const brand=(m.brand||"").trim();
@@ -6994,10 +7027,11 @@ function reportHeader(rows, total, groups){
     </div></section>
 
   <section class="rk">
-    <div class="rk-b"><div class="k">มูลค่าปัจจุบัน</div><div class="v">${fmt(total)}</div><div class="s">บาท</div></div>
+    <div class="rk-b"><div class="k">มูลค่ากองทุน</div><div class="v">${fmt(total)}</div><div class="s">${idle>0.5?"ไม่รวมเงินสด":"บาท"}</div></div>
     <div class="rk-b"><div class="k">มูลค่าต้นทุน</div><div class="v">${fmt(cost)}</div><div class="s">บาท</div></div>
     <div class="rk-b"><div class="k">กำไร / ขาดทุน</div><div class="v ${cls(pl)}">${sign(pl)}</div><div class="s">ยังไม่รวมเงินปันผลและค่าธรรมเนียม</div></div>
     <div class="rk-b"><div class="k">% ผลตอบแทน</div><div class="v ${cls(pl)}">${baseOK(cost)?(pl>=0?"+":"")+pct(pl/cost):"–"}</div><div class="s">${baseOK(cost)?"เทียบกับต้นทุนรวม":"ไม่มีต้นทุนคงเหลือให้เทียบ"}</div></div>
+    ${idle>0.5?`<div class="rk-b"><div class="k">เงินสดรอลงทุน</div><div class="v">${fmt(idle)}</div><div class="s">ไม่นำมาคิดผลตอบแทน</div></div>`:""}
   </section>`;
 
   /* แถบน้ำหนักสินทรัพย์หลัก */
@@ -7135,6 +7169,7 @@ const DISC_GROUPS=[
   "รายการที่ไม่สำเร็จหรือยังไม่ได้รับการยืนยันจะถูกตัดออกจากการคำนวณทั้งหมด",
   "หน่วยที่ได้รับจากโปรโมชัน (ระบุคำว่า promotion ในหมายเหตุของ statement) นับเป็นเงินที่เข้าพอร์ตจากภายนอกเช่นเดียวกับเงินโอน จึงรวมอยู่ในเงินลงทุนสุทธิ ถ้าไม่นับ ระบบจะมองว่ามูลค่าที่เพิ่มขึ้นเป็นผลตอบแทนจากการลงทุนทำให้ตัวเลขสูงกว่าความจริง · แต่ไม่หักจากเงินที่ได้จากการขายกองเดิมเพราะลูกค้าไม่ได้จ่ายเงินจริง · ระบบแยกแสดงจำนวนไว้ในแท็บที่ 3",
   "เงินลงทุนสุทธิ = ซื้อสะสม − ขายสะสม + เงินสดที่ยังไม่ได้ลงทุนต่อ ตัวเลขนี้ต่างจาก “เงินที่ลงในกองทุน” ในกราฟซึ่งไม่รวมเงินสด",
+  "เงินที่ขายแล้วยังไม่ได้ลงทุนต่อถูกนับรวมในมูลค่าพอร์ตและใน TWR เพราะยังเป็นเงินในความดูแล การถือเงินสดจึงฉุดผลตอบแทนลงตามจริง · ส่วน % ผลตอบแทนเทียบต้นทุนคิดเฉพาะเงินที่ลงในกองทุน · ถ้าลูกค้าถอนเงินออกจากบัญชีจริงต้องบันทึกเป็นรายการถอน ไม่งั้นมูลค่าพอร์ตจะสูงกว่าความจริงและผลตอบแทนต่ำกว่าความจริง",
   "การตามรอยที่มาของเงินในแท็บที่ 3 ใช้เลขอ้างอิง XWT จับคู่ก่อน ซึ่งเป็นการจับคู่จริงจาก statement · ส่วนที่ไม่มีเลขอ้างอิงใช้วิธีอนุมานแบบเข้าก่อนออกก่อน ซึ่งอาจไม่ตรงกับเจตนาจริงของลูกค้า ระบบติดป้ายแยกให้เห็นทั้งสองแบบ",
   "ถ้าเปิด statement ด้วย Excel แล้วบันทึกเป็น CSV เลขอ้างอิง XWT อาจถูกแปลงเป็นรูปแบบวิทยาศาสตร์จนจับคู่ผิด ระบบจะขึ้นเตือนและถอยไปใช้วิธีอนุมานแทน"]],
 
@@ -7551,20 +7586,20 @@ function cardReport(a){
 }
 function groupsFromHoldings(){
   const rows=rbVals();
-  /* เงินสดที่ขายแล้วยังไม่ได้ลงทุนต่อ นับเป็นสินทรัพย์หนึ่งของพอร์ต */
+  /* เงินสดที่ขายแล้วยังไม่ได้ลงทุนต่อ แยกออกจากกองทุน ไม่นับในสัดส่วนสินทรัพย์
+     เพื่อให้ตัวเลขในรายงานตรงกับพอร์ตที่ บลจ. แสดง */
   const idle = (A && !A.portfolioOnly && A.cash && A.cash.length) ? cashAt(A,new Date()) : 0;
-  if(idle>0.5) rows.push({f:{name:"เงินสดรอลงทุน", units:0, cost:idle, _cash:true}, v:idle, nav:0});
   const tot=rows.reduce((s,x)=>s+x.v,0)||1;
   const gm=new Map();
   rows.forEach(x=>{
-    const cl = x.f._cash ? {main:"ตราสารหนี้", sub:"ตลาดเงินและเงินฝาก", ac:""} : classify(x.f.name);
+    const cl = classify(x.f.name);
     if(!gm.has(cl.main)) gm.set(cl.main,{name:cl.main,color:mainColor(cl.main),v:0,subs:new Map(),items:[]});
     const g=gm.get(cl.main); g.v+=x.v;
     const sname=cl.sub||"ไม่ระบุ";
     g.subs.set(sname,(g.subs.get(sname)||0)+x.v);
     g.items.push({...x, cl});
   });
-  return {groups:[...gm.values()].sort((p,q)=>q.v-p.v), total:tot, rows};
+  return {groups:[...gm.values()].sort((p,q)=>q.v-p.v), total:tot, rows, idle};
 }
 /* บล็อกรายละเอียดใต้แต่ละกองในรายงานลูกค้า — รวมสถานะ มุมมอง ข่าว และข้อความถึงลูกค้า */
 function fundDetailBlock(name, cl, note, act){
@@ -7606,24 +7641,38 @@ function fundDetailBlock(name, cl, note, act){
 }
 function renderReport(){
   const host=$("#reportHost"); if(!host||!A) return;
-  const {groups,total,rows}=groupsFromHoldings();
+  const {groups,total,rows,idle}=groupsFromHoldings();
   if(!rows.length){ host.innerHTML=`<div class="card"><p class="foot">ยังไม่มีข้อมูลพอร์ตสำหรับสร้างรายงาน</p></div>`; return; }
   const now=new Date();
-  const twAll = (A.portfolioOnly||!A.first) ? null : twrSeg(A,new Date(A.first.getTime()-86400000),now,total);
+  const twAll = (A.portfolioOnly||!A.first) ? null : twrSeg(A,new Date(A.first.getTime()-86400000),now,total+idle);
+  /* เงินสดที่ยังไม่ได้ลงทุนไม่ควรถ่วงผลตอบแทน จึงหักออกจากฐานทั้งสองฝั่ง */
+  const invBase = Math.max(0, (A.portfolioOnly?A.costHeld:A.netExternal) - idle);
+  const gainFund = total - invBase;
+  const ci = cashInfo(A, total);
   const per=[["3 เดือน",3,"m"],["6 เดือน",6,"m"],["1 ปี",1,"y"],["3 ปี",3,"y"]];
 
-  let html=`<section class="card rhcard">${reportHeader(rows,total,groups)}</section>
+  let html=`<section class="card rhcard">${reportHeader(rows,total,groups,idle)}</section>
 
   <section class="card"><div class="card-head"><h2>สรุปพอร์ตสำหรับลูกค้า</h2>
       <span class="aside">${esc(meta().client||"")} ${meta().asOf?"· ข้อมูล ณ "+esc(meta().asOf):""}</span></div>
     <div class="kpis">
-      <div class="kpi"><div class="k">มูลค่าพอร์ตปัจจุบัน</div><div class="v">${fmt(total)}</div></div>
-      <div class="kpi"><div class="k">${A.portfolioOnly?"ต้นทุนพอร์ต":"เงินลงทุนสุทธิ"}</div><div class="v">${fmt(A.netExternal)}</div>
-        <div class="s">${A.portfolioOnly?"ต้นทุนรวมของกองที่ถืออยู่":"เงินจริงที่ลูกค้าใส่เข้าพอร์ต หักเงินที่ขายออกแล้ว"}</div></div>
-      <div class="kpi hero"><div class="k">ผลตอบแทนรวม</div><div class="v ${cls(total-A.netExternal)}">${sign(total-A.netExternal)}</div>
-        <div class="s">${baseOK(A.netExternal) ? pct((total-A.netExternal)/A.netExternal)+" ของเงินลงทุนสุทธิ" : esc(baseNote(A.netExternal))}</div></div>
-      ${twAll==null?"":`<div class="kpi"><div class="k">ผลตอบแทนล้วน (TWR) ตั้งแต่เริ่ม</div><div class="v ${cls(twAll)}">${pct(twAll)}</div></div>`}
-    </div></section>`;
+      <div class="kpi"><div class="k">มูลค่ากองทุน</div><div class="v">${fmt(total)}</div>
+        <div class="s">${fmt0(rows.length)} กองทุน${idle>0.5?" · ไม่รวมเงินสดรอลงทุน":""}</div></div>
+      <div class="kpi"><div class="k">${A.portfolioOnly?"ต้นทุนพอร์ต":"เงินลงทุนสุทธิ"}</div><div class="v">${fmt(invBase)}</div>
+        <div class="s">${A.portfolioOnly?"ต้นทุนรวมของกองที่ถืออยู่"
+          :(idle>0.5?"เงินที่ลูกค้าใส่เข้าพอร์ต หักส่วนที่ยังเป็นเงินสด":"เงินจริงที่ลูกค้าใส่เข้าพอร์ต หักเงินที่ขายออกแล้ว")}</div></div>
+      <div class="kpi hero"><div class="k">ผลตอบแทนรวม</div><div class="v ${cls(gainFund)}">${sign(gainFund)}</div>
+        <div class="s">${baseOK(invBase) ? pct(gainFund/invBase)+" ของเงินที่ลงในกองทุน" : esc(baseNote(invBase))}</div></div>
+      ${idle>0.5?`<div class="kpi"><div class="k">เงินสดรอลงทุน</div><div class="v">${fmt(idle)}</div>
+        <div class="s">ขายแล้วยังไม่ได้ซื้อกองใหม่ · ไม่นำมาคิดผลตอบแทน</div></div>`:""}
+      ${twAll==null?"":`<div class="kpi"><div class="k">ผลตอบแทนล้วน (TWR) ตั้งแต่เริ่ม</div><div class="v ${cls(twAll)}">${pct(twAll)}</div>
+        <div class="s">${ci ? `คิดจากพอร์ตทั้งก้อน รวมเงินสด ${fmt0(ci.idle)} บาท (${pct(ci.share)} ของพอร์ต)` : "ตัดผลของจังหวะและขนาดการใส่เงินออกแล้ว"}</div></div>`}
+    </div>
+    ${idle>0.5?`<p class="foot" style="margin-top:14px">มูลค่ารวมทั้งพอร์ต ${fmt(total+idle)} บาท = มูลค่ากองทุน ${fmt(total)} + เงินสดรอลงทุน ${fmt(idle)} · ผลตอบแทนคิดจากเงินที่ลงในกองทุนเท่านั้น ไม่รวมเงินสดที่ยังไม่ได้ลงทุน</p>`:""}
+    ${ci&&ci.stale?`<div class="msg" style="margin-top:12px"><strong>เงินสดค้างในพอร์ตมานาน</strong> —
+      ${fmt(ci.idle)} บาท คิดเป็น ${pct(ci.share)} ของพอร์ต ไม่ได้ลงทุนต่อมาแล้ว ${fmt0(ci.days)} วัน${ci.since?` ตั้งแต่ ${thDate(ci.since)}`:""}<br>
+      ถ้าลูกค้าถอนเงินก้อนนี้ออกไปแล้ว ให้บันทึกเป็นรายการถอนในแท็บที่ 1 เพื่อให้มูลค่าพอร์ตและผลตอบแทนตรงกับความจริง</div>`:""}
+    </section>`;
 
   const twAll_unused=twAll;
   /* สัดส่วนสินทรัพย์ — โดนัท */
