@@ -754,6 +754,48 @@ select,option{font-family:var(--sans)}
       <div id="pErr"></div>
     </div>
 
+    <div class="card" id="extraCard">
+      <div class="card-head">
+        <h2>เงินฝาก / ถอนที่ไม่อยู่ใน statement</h2>
+        <span class="aside">ไม่บังคับ — ใช้เมื่อลูกค้าโอนเงินออกจากบัญชีหรือฝากเข้าโดยยังไม่ซื้อกอง</span>
+      </div>
+      <p class="foot" style="margin:0 0 14px">
+        statement บอกแค่การซื้อขายกองทุน ไม่รู้ว่าเงินที่ขายแล้วถูกโอนออกจากบัญชีหรือยังค้างอยู่
+        ระบบจึงถือว่ายังอยู่ในพอร์ตเสมอ · ถ้าลูกค้าถอนออกไปจริง ให้บันทึกที่นี่เพื่อให้มูลค่าพอร์ตและผลตอบแทนตรงกับความจริง
+      </p>
+      <div class="grid g3">
+        <div>
+          <div class="eyebrow">วิธีที่ 1 — กรอกทีละรายการ</div>
+          <div class="wrap"><table id="xTable"><thead><tr>
+            <th class="l">วันที่</th><th>จำนวนเงิน</th><th class="l">หมายเหตุ</th><th></th>
+          </tr></thead><tbody></tbody></table></div>
+          <div class="stack" style="margin-top:10px">
+            <button class="btn" id="xAddW">เพิ่มรายการถอน</button>
+            <button class="btn" id="xAddD">เพิ่มรายการฝาก</button>
+          </div>
+        </div>
+        <div>
+          <div class="eyebrow">วิธีที่ 2 — วางข้อมูลจากชีต</div>
+          <textarea class="f" id="xPaste" style="min-height:150px"
+            placeholder="วันที่, จำนวนเงิน, หมายเหตุ&#10;15/06/2026, -500000, ถอนไปใช้&#10;20/07/2026, 200000, ฝากรอลงทุน"></textarea>
+          <div class="stack">
+            <button class="btn amber" id="xRun">อ่านข้อมูลที่วาง</button>
+            <button class="btn quiet" id="xClear">ล้างทั้งหมด</button>
+          </div>
+        </div>
+        <div>
+          <div class="eyebrow">วิธีที่ 3 — อัปโหลดไฟล์</div>
+          <div class="drop" id="xDrop">
+            <div>ลากไฟล์มาวางที่นี่<br>หรือเลือกไฟล์จากเครื่อง</div>
+            <button class="btn sm" id="xPickBtn">เลือกไฟล์ .csv / .tsv</button>
+          </div>
+          <input type="file" id="xFile" accept=".csv,.tsv,.txt,text/csv" hidden>
+          <p class="foot" style="margin-top:10px">จำนวนเงินติดลบ = ถอนออก · เป็นบวก = ฝากเข้า</p>
+        </div>
+      </div>
+      <div id="xErr"></div>
+    </div>
+
     <div class="card">
       <div class="card-head">
         <h2>นำเข้าข้อมูลรายการย้อนหลัง</h2>
@@ -3297,7 +3339,7 @@ function cashWarnBox(){
   if(!ci || !ci.stale) return "";
   return `<div class="msg" style="margin:0 0 14px"><strong>เงินสดค้างในพอร์ตมานาน</strong> —
     ${fmt(ci.idle)} บาท คิดเป็น ${pct(ci.share)} ของพอร์ต ไม่ได้ลงทุนต่อมาแล้ว ${fmt0(ci.days)} วัน${ci.since?` ตั้งแต่ ${thDate(ci.since)}`:""}<br>
-    เงินก้อนนี้ถูกนับรวมในมูลค่าพอร์ตและฉุด TWR ลง · ถ้าลูกค้าถอนออกไปแล้วให้บันทึกเป็นรายการถอนในแท็บที่ 1</div>`;
+    เงินก้อนนี้ถูกนับรวมในมูลค่าพอร์ตและฉุด TWR ลง · ถ้าลูกค้าถอนออกไปแล้วให้บันทึกที่การ์ด <strong>“เงินฝาก / ถอนที่ไม่อยู่ใน statement”</strong> ในแท็บที่ 1</div>`;
 }
 function renderNavCover(){
   const box=$("#navCover"); if(!box||!A) return;
@@ -5167,13 +5209,83 @@ function runExtra(text,label){
     if(lastText) run(lastText,"");
   }catch(e){ extraStatus(e.message||String(e),false); }
 }
+/* ตารางกรอกทีละรายการ */
+function drawExtra(){
+  const tb=$("#xTable tbody"); if(!tb) return;
+  const rows=EXTRA.rows;
+  tb.innerHTML = rows.length ? rows.map((r,i)=>`<tr>
+      <td class="l"><input class="cellL xd" data-i="${i}" value="${esc(thDate(r.date))}" placeholder="15/06/2026"></td>
+      <td><input class="nav xa" data-i="${i}" inputmode="decimal" value="${fmt(r.amount)}"></td>
+      <td class="l"><input class="cellL xn" data-i="${i}" value="${esc(r.note||"")}" placeholder="เช่น ถอนไปใช้"></td>
+      <td class="c"><button class="xbtn no-print" data-del="${i}" title="ลบแถวนี้">×</button></td></tr>`).join("")
+    : `<tr><td colspan="4" class="l" style="padding:16px;color:var(--muted-2)">ยังไม่มีรายการ — กดปุ่มด้านล่างเพื่อเพิ่ม</td></tr>`;
+  tb.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("change",()=>{
+      const i=+inp.dataset.i, r=EXTRA.rows[i]; if(!r) return;
+      if(inp.classList.contains("xd")){ const d=toDate(inp.value); if(d) r.date=d; }
+      else if(inp.classList.contains("xa")) r.amount=toNum(inp.value);
+      else r.note=inp.value;
+      EXTRA.rows.sort((a,b)=>a.date-b.date);
+      EXTRA.text=extraToText();
+      drawExtra(); extraStatus("แก้ไขแล้ว",true);
+      if(lastText) run(lastText,"");
+    });
+  });
+  tb.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",()=>{
+    EXTRA.rows.splice(+b.dataset.del,1); EXTRA.text=extraToText();
+    drawExtra(); extraStatus("ลบรายการแล้ว",true);
+    if(lastText) run(lastText,"");
+  }));
+}
+const extraToText = () => EXTRA.rows.map(r=>`${thDate(r.date)},${r.amount},${r.note||""}`).join("\n");
+function addExtra(sign){
+  const d=new Date();
+  EXTRA.rows.push({date:d, amount: sign<0 ? -100000 : 100000, note: sign<0?"ถอนไปใช้":"ฝากรอลงทุน"});
+  EXTRA.rows.sort((a,b)=>a.date-b.date);
+  EXTRA.text=extraToText();
+  drawExtra(); extraStatus("เพิ่มรายการแล้ว — แก้วันที่และจำนวนเงินให้ตรงกับความจริง",true);
+  if(lastText) run(lastText,"");
+}
 function resetExtra(){
   EXTRA={rows:[],text:""};
   if($("#xPaste")) $("#xPaste").value="";
   if($("#xFile")) $("#xFile").value="";
   extraStatus("ล้างรายการเงินเข้า/ออกแล้ว",true);
+  drawExtra();
   if(lastText) run(lastText,"");
 }
+/* ต่อสายปุ่มของการ์ดนี้ */
+(function(){
+  const ready=()=>{
+    if(!$("#xRun")) return setTimeout(ready,300);
+    drawExtra();
+    $("#xAddW").addEventListener("click",()=>addExtra(-1));
+    $("#xAddD").addEventListener("click",()=>addExtra(1));
+    $("#xRun").addEventListener("click",()=>{
+      const t=$("#xPaste").value.trim();
+      if(!t){ extraStatus("ยังไม่ได้วางข้อมูล",false); return; }
+      runExtra(t,"ข้อมูลที่วาง"); drawExtra();
+    });
+    $("#xClear").addEventListener("click",resetExtra);
+    $("#xPickBtn").addEventListener("click",()=>$("#xFile").click());
+    $("#xFile").addEventListener("change",e=>{
+      const f=e.target.files&&e.target.files[0]; if(!f) return;
+      const fr=new FileReader();
+      fr.onload=()=>{ $("#xPaste").value=String(fr.result); runExtra(String(fr.result),f.name); drawExtra(); };
+      fr.readAsText(f,"utf-8");
+    });
+    const dp=$("#xDrop");
+    ["dragenter","dragover"].forEach(ev=>dp.addEventListener(ev,e=>{e.preventDefault();dp.classList.add("hot");}));
+    ["dragleave","drop"].forEach(ev=>dp.addEventListener(ev,e=>{e.preventDefault();dp.classList.remove("hot");}));
+    dp.addEventListener("drop",e=>{
+      const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return;
+      const fr=new FileReader();
+      fr.onload=()=>{ $("#xPaste").value=String(fr.result); runExtra(String(fr.result),f.name); drawExtra(); };
+      fr.readAsText(f,"utf-8");
+    });
+  };
+  ready();
+})();
 
 /* ============================================================
    ประเภทสินทรัพย์ · มุมมองการลงทุน · ผลตอบแทนรายกอง
@@ -7671,7 +7783,7 @@ function renderReport(){
     ${idle>0.5?`<p class="foot" style="margin-top:14px">มูลค่ารวมทั้งพอร์ต ${fmt(total+idle)} บาท = มูลค่ากองทุน ${fmt(total)} + เงินสดรอลงทุน ${fmt(idle)} · ผลตอบแทนคิดจากเงินที่ลงในกองทุนเท่านั้น ไม่รวมเงินสดที่ยังไม่ได้ลงทุน</p>`:""}
     ${ci&&ci.stale?`<div class="msg" style="margin-top:12px"><strong>เงินสดค้างในพอร์ตมานาน</strong> —
       ${fmt(ci.idle)} บาท คิดเป็น ${pct(ci.share)} ของพอร์ต ไม่ได้ลงทุนต่อมาแล้ว ${fmt0(ci.days)} วัน${ci.since?` ตั้งแต่ ${thDate(ci.since)}`:""}<br>
-      ถ้าลูกค้าถอนเงินก้อนนี้ออกไปแล้ว ให้บันทึกเป็นรายการถอนในแท็บที่ 1 เพื่อให้มูลค่าพอร์ตและผลตอบแทนตรงกับความจริง</div>`:""}
+      ถ้าลูกค้าถอนเงินก้อนนี้ออกไปแล้ว ให้บันทึกที่การ์ด <strong>“เงินฝาก / ถอนที่ไม่อยู่ใน statement”</strong> ในแท็บที่ 1 เพื่อให้มูลค่าพอร์ตและผลตอบแทนตรงกับความจริง</div>`:""}
     </section>`;
 
   const twAll_unused=twAll;
