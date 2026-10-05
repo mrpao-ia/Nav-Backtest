@@ -533,6 +533,10 @@ select,option{font-family:var(--sans)}
 
 .msg{padding:11px 15px;border-radius:9px;font-size:13.5px;margin-top:16px;background:var(--loss-soft);color:var(--loss)}
 .msg.ok{background:var(--gain-soft);color:var(--gain)}
+.msg.info{background:#EEF3FA;color:#2B4A78}
+.alias-list{margin:6px 0 0;padding-left:18px;line-height:1.65}
+.alias-list li{margin:4px 0}
+.was{font-weight:400;font-size:11.5px;color:var(--muted);white-space:nowrap}
 .empty{text-align:center;color:var(--muted);font-size:13.5px;padding:56px 20px}
 .empty strong{display:block;color:var(--text);font-size:15px;margin-bottom:6px;font-weight:600}
 .toast{
@@ -2330,6 +2334,126 @@ function parseStatement(text){
 /* ============ ตัวแยกข้อมูลพอร์ตปัจจุบัน ============ */
 const fundKey = s => String(s||"").normalize("NFC").replace(/[\u2010-\u2015\u2212]/g,"-").replace(/\s+/g,"").toUpperCase();
 
+/* ============ กองที่เปลี่ยนรหัส (แท็บ fund_alias) ============
+   บลจ. เปลี่ยนชื่อย่อกองได้ เช่น K-STARRMF → K-VALUERMF จึงพบทั้งสองรหัสใน statement เดียวกัน
+   ทุกจุดที่จับคู่กองให้แปลงเป็นรหัสล่าสุดก่อน (ไล่ต่อเป็นทอด A → B → C)
+   คู่ที่วนกลับกันเอง (A → B และ B → A) ระบบไม่รวมให้ เพราะบอกไม่ได้ว่าแถวไหนเป็นกองไหน */
+const aliasEmpty = () => ({canon:new Map(), olds:new Map(), preds:new Map(), name:new Map(), bad:[], n:0, sig:"", state:"off", msg:""});
+let ALIAS=aliasEmpty();
+function buildAlias(pairs){
+  const next=new Map(), name=new Map(), bad=[], skip=new Set();
+  pairs.forEach(([o,n])=>{
+    const ko=fundKey(o), kn=fundKey(n);
+    if(!ko || !kn || ko===kn) return;
+    if(!name.has(ko)) name.set(ko,String(o).trim());
+    if(!name.has(kn)) name.set(kn,String(n).trim());
+    if(next.has(ko) && next.get(ko)!==kn){ skip.add(ko); return; }
+    next.set(ko,kn);
+  });
+  skip.forEach(k=>{ bad.push({codes:[name.get(k)], why:"รหัสเดียวกันชี้ไปหลายรหัสใหม่"}); next.delete(k); });
+  /* ไล่ต่อจนสุดทาง ถ้าวนกลับมาที่เดิมถือว่าใช้ไม่ได้ทั้งวง */
+  const canon=new Map(), loop=new Set(), seenLoop=new Set();
+  next.forEach((_,k)=>{
+    const path=[k], seen=new Set([k]); let cur=k, cyc=false;
+    while(next.has(cur)){
+      cur=next.get(cur);
+      if(seen.has(cur)){ cyc=true; break; }
+      seen.add(cur); path.push(cur);
+    }
+    if(!cyc){ canon.set(k,cur); return; }
+    path.forEach(p=>loop.add(p));
+    const ring=[]; let c2=cur; do{ ring.push(c2); c2=next.get(c2); }while(c2!==cur && ring.length<50);
+    const sig=ring.slice().sort().join("|");
+    if(!seenLoop.has(sig)){ seenLoop.add(sig); bad.push({codes:ring.map(x=>name.get(x)||x), why:"รหัสวนกลับกันเอง"}); }
+    if(ring.indexOf(k)<0) bad.push({codes:[name.get(k)||k], why:"ชี้ไปยังรหัสที่วนกันเอง"});
+  });
+  loop.forEach(k=>canon.delete(k));
+  /* รหัสเก่าทั้งหมดของแต่ละรหัสหลัก เรียงจากใหม่ไปเก่า */
+  const preds=new Map();
+  canon.forEach((_,k)=>{ const n=next.get(k); if(!preds.has(n)) preds.set(n,[]); preds.get(n).push(k); });
+  const olds=new Map();
+  canon.forEach((c)=>{
+    if(olds.has(c)) return;
+    const out=[], q=[c];
+    while(q.length){ const x=q.shift(); (preds.get(x)||[]).forEach(p=>{ if(out.indexOf(p)<0){ out.push(p); q.push(p); } }); }
+    olds.set(c,out);
+  });
+  const sig=[...canon.entries()].map(e=>e.join(">")).sort().join(",");
+  return {canon, olds, preds, name, bad, n:canon.size, sig};
+}
+/* อ่านแท็บ fund_alias — ต้องมีคอลัมน์ old_code และ new_code
+   gviz ส่งแท็บแรกกลับมาเมื่อหาแท็บไม่เจอ จึงต้องเช็กหัวคอลัมน์ทุกครั้ง */
+function applyAlias(m){
+  if(!m||!m.length) throw new Error("ไม่พบข้อมูลในแท็บ fund_alias");
+  const isOld=c=>/^old_?code$/i.test(String(c||"").trim()), isNew=c=>/^new_?code$/i.test(String(c||"").trim());
+  const hi=m.findIndex(r=>r.some(isOld) && r.some(isNew));
+  if(hi<0) throw new Error("ไม่พบแท็บ fund_alias (หรือไม่มีคอลัมน์ old_code / new_code)");
+  const cO=m[hi].findIndex(isOld), cN=m[hi].findIndex(isNew);
+  const pairs=[];
+  for(let i=hi+1;i<m.length;i++){
+    const o=String(m[i][cO]||"").trim(), n=String(m[i][cN]||"").trim();
+    if(o && n) pairs.push([o,n]);
+  }
+  const x=buildAlias(pairs);
+  ALIAS={...x, state:"ok", msg:""};
+  STORE.resetCache();
+  FMAP_BASE=null;
+  return x.n;
+}
+const aliasKey = k => ALIAS.canon.get(k) || k;
+/* ชื่อกองที่ใช้ในรายงาน — รหัสล่าสุดตามที่เขียนในชีต
+   แถวที่ใช้รหัสใหม่อยู่แล้วก็แปลงเป็นตัวสะกดเดียวกัน เพื่อให้รวมกับแถวรหัสเก่าได้ */
+function canonName(n){
+  const k=fundKey(n), c=ALIAS.canon.get(k) || (ALIAS.olds.has(k) ? k : null);
+  return c ? (ALIAS.name.get(c)||String(n).trim()) : n;
+}
+/* คีย์ที่ใช้ค้นข้อมูลของกองนี้: รหัสล่าสุดก่อน แล้วค่อยถอยไปรหัสเก่า */
+function aliasKeys(n){
+  const k=fundKey(n), c=aliasKey(k), out=[c];
+  if(k!==c) out.push(k);
+  (ALIAS.olds.get(c)||[]).forEach(o=>{ if(out.indexOf(o)<0) out.push(o); });
+  return out;
+}
+function aliasGet(map, n){
+  if(!map) return undefined;
+  for(const k of aliasKeys(n)) if(map.has(k)) return map.get(k);
+  return undefined;
+}
+/* แปลงรายการซื้อขายเป็นรหัสหลัก — เก็บรหัสในไฟล์ไว้ที่ fund0/dest0 เพื่อแสดงและแปลงซ้ำได้ */
+function aliasRecs(recs){
+  (recs||[]).forEach(r=>{
+    if(r.fund0==null) r.fund0=r.fund;
+    if(r.dest0==null) r.dest0=r.dest||"";
+    r.fund=canonName(r.fund0);
+    r.dest=r.dest0 ? canonName(r.dest0) : r.dest0;
+    /* สับเปลี่ยนจากรหัสเก่าไปรหัสใหม่ของกองเดียวกันด้วยหน่วยเท่ากัน = แค่เปลี่ยนรหัส ไม่ใช่การซื้อขาย */
+    r.rename = r.type==="switch" && !!r.dest && fundKey(r.fund)===fundKey(r.dest)
+      && fundKey(r.fund0)!==fundKey(r.dest0) && Math.abs((+r.units||0)-(+r.destUnits||0))<0.01;
+  });
+  return recs;
+}
+/* รหัสเก่าที่พบในไฟล์ของลูกค้า แยกตามกอง (คีย์รหัสหลัก) */
+function aliasSeen(a){
+  const out=new Map();
+  const put=(raw,cur)=>{
+    if(!raw || !cur || fundKey(raw)===fundKey(cur)) return;
+    const k=fundKey(cur);
+    if(!out.has(k)) out.set(k,[]);
+    if(out.get(k).indexOf(raw)<0) out.get(k).push(raw);
+  };
+  ((a&&a.recs)||[]).forEach(r=>{ put(r.fund0,r.fund); put(r.dest0,r.dest); });
+  if(PORT.map) PORT.map.forEach(p=>(p.raw||[]).forEach(x=>put(x,p.fund)));
+  return out;
+}
+const wasCodes = n => (A && A.was && A.was.get(fundKey(n))) || [];
+/* ต่อท้ายชื่อกอง "(เดิม: รหัสเก่า)" — ส่ง seen มาเพื่อแสดงเฉพาะครั้งแรกที่กองปรากฏ */
+function wasHtml(n, seen){
+  const w=wasCodes(n);
+  if(!w.length) return "";
+  if(seen){ const k=fundKey(n); if(seen.has(k)) return ""; seen.add(k); }
+  return ` <span class="was">(เดิม: ${esc(w.join(", "))})</span>`;
+}
+
 function parsePortfolio(text){
   const rows=parseDelimited(text,detectDelim(text));
   if(!rows.length) throw new Error("ไม่พบข้อมูลในสิ่งที่วางมา");
@@ -2389,6 +2513,67 @@ function decodeLine(line){
 function makeStore(){
   const raw=new Map(), over=new Map(), cache=new Map();
   const meta={lo:null,hi:null,points:0,funds:0};
+  /* NAV ของรหัสนี้เอง ไม่รวมรหัสเก่า */
+  const own=k=>{
+    const r=raw.get(k), o=over.get(k);
+    let pts=[], name="";
+    if(r){ pts=decodeLine(r.line); name=r.name; }
+    if(o){
+      name=o.name||name;
+      if(!pts.length) pts=o.pts.slice();
+      else {
+        const m=new Map(pts.map(p=>[+p.d,p]));
+        o.pts.forEach(p=>m.set(+p.d,p));
+        pts=[...m.values()].sort((x,y)=>x.d-y.d);
+      }
+    }
+    return pts.length?{name,pts}:null;
+  };
+  /* ช่วงต่อระหว่างรหัสเก่ากับรหัสใหม่ — เก็บไว้ให้หน้าตรวจข้อมูลเตือน ไม่ได้ใช้ปรับตัวเลข */
+  const joinInfo=(prev,next,from,to)=>{
+    const cut=next.pts[0].d;
+    const before=prev.pts.filter(p=>p.d<cut);
+    const a=before[before.length-1], b=next.pts[0];
+    const j={from, to, cut, last:a||null, first:b, jump:null, gap:null, lim:null, overlap:0, diff:0, flag:""};
+    const nm=new Map(next.pts.map(p=>[+p.d,p.nav]));
+    prev.pts.forEach(p=>{ if(p.d>=cut && nm.has(+p.d)){ j.overlap++; j.diff=Math.max(j.diff,Math.abs(nm.get(+p.d)/p.nav-1)); } });
+    if(!a) return j;
+    j.jump=b.nav/a.nav-1;
+    j.gap=Math.round((b.d-a.d)/86400000);
+    /* เกณฑ์ "กระโดดผิดปกติ" อิงความผันผวนรายวันของรหัสเก่าเอง (60 จุดล่าสุด) และระยะห่างของช่วงต่อ */
+    const rs=[];
+    for(let i=Math.max(1,before.length-60);i<before.length;i++){
+      const r=before[i].nav/before[i-1].nav-1; if(isFinite(r)) rs.push(Math.abs(r));
+    }
+    rs.sort((x,y)=>x-y);
+    const p90=rs.length ? rs[Math.min(rs.length-1,Math.floor(rs.length*0.9))] : 0.01;
+    j.lim=Math.max(0.02, 4*p90*Math.sqrt(Math.max(1,Math.round(j.gap*5/7))));
+    if(Math.abs(j.jump)>j.lim) j.flag="jump";
+    else if(j.overlap && j.diff>0.005) j.flag="overlap";
+    else if(j.gap>14) j.flag="gap";
+    return j;
+  };
+  /* NAV ต่อเนื่องข้ามการเปลี่ยนรหัส: ก่อนวันแรกที่มี NAV ของรหัสใหม่ใช้ NAV ของรหัสเก่า
+     ตั้งแต่วันนั้นใช้ของรหัสใหม่ · ไม่ปรับหรือเกลี่ยตัวเลขใด ๆ */
+  const full=(k,depth)=>{
+    const self=own(k);
+    const pr=ALIAS.preds.get(k);
+    if(!pr || !pr.length || depth>8) return self;
+    const cut=self ? self.pts[0].d : null;
+    const parts=pr.map(p=>({p, s:full(p,depth+1)})).filter(x=>x.s && x.s.pts.length)
+      .sort((x,y)=>x.s.pts[x.s.pts.length-1].d - y.s.pts[y.s.pts.length-1].d);
+    if(!parts.length) return self;
+    const m=new Map(), joins=[];
+    parts.forEach(x=>{
+      x.s.pts.forEach(pt=>{ if(!cut || pt.d<cut) m.set(+pt.d,pt); });
+      (x.s.joins||[]).forEach(j=>joins.push(j));
+      if(self) joins.push(joinInfo(x.s, self, ALIAS.name.get(x.p)||x.p, ALIAS.name.get(k)||self.name));
+    });
+    if(self) self.pts.forEach(pt=>m.set(+pt.d,pt));
+    const pts=[...m.values()].sort((x,y)=>x.d-y.d);
+    return {name: self ? self.name : (ALIAS.name.get(k)||k), pts, joins, own:!!self,
+            olds: parts.map(x=>({code:ALIAS.name.get(x.p)||x.p, last:x.s.pts[x.s.pts.length-1]}))};
+  };
   const S={
     raw, over, meta,
     loadText(txt,ds){
@@ -2405,15 +2590,17 @@ function makeStore(){
       return raw.size>0;
     },
     addImported(map){
-      map.forEach((o,k)=>{ over.set(k,o); cache.delete(k); });
+      /* รหัสหลักเอา NAV ของรหัสเก่ามาต่อด้วย จึงต้องล้างของรหัสหลักไปพร้อมกัน */
+      map.forEach((o,k)=>{ over.set(k,o); cache.delete(k); cache.delete(aliasKey(k)); });
       map.forEach(o=>{
         const a=o.pts[0].d, b=o.pts[o.pts.length-1].d;
         if(!meta.lo||a<meta.lo) meta.lo=a;
         if(!meta.hi||b>meta.hi) meta.hi=b;
       });
     },
-    clearImported(){ over.forEach((_,k)=>cache.delete(k)); over.clear(); },
-    has(k){ return raw.has(k)||over.has(k); },
+    clearImported(){ over.clear(); cache.clear(); },
+    resetCache(){ cache.clear(); },
+    has(k){ return aliasKeys(k).some(x=>raw.has(x)||over.has(x)); },
     get size(){ return over.size ? new Set([...raw.keys(),...over.keys()]).size : raw.size; },
     names(){
       const out=new Set();
@@ -2421,21 +2608,11 @@ function makeStore(){
       over.forEach(o=>out.add(o.name));
       return [...out].sort();
     },
+    /* ขอด้วยรหัสเก่าก็ได้ชุดของรหัสหลัก (ต่อ NAV ให้แล้ว) */
     get(k){
+      k=aliasKey(k);
       if(cache.has(k)) return cache.get(k);
-      const r=raw.get(k), o=over.get(k);
-      let pts=[], name="";
-      if(r){ pts=decodeLine(r.line); name=r.name; }
-      if(o){
-        name=o.name||name;
-        if(!pts.length) pts=o.pts.slice();
-        else {
-          const m=new Map(pts.map(p=>[+p.d,p]));
-          o.pts.forEach(p=>m.set(+p.d,p));
-          pts=[...m.values()].sort((x,y)=>x.d-y.d);
-        }
-      }
-      const res=pts.length?{name,pts}:null;
+      const res=full(k,0);
       cache.set(k,res);
       return res;
     }
@@ -2703,7 +2880,8 @@ const promoLabel = r => {
   return rest ? "โปรโมชัน · "+rest : "โปรโมชัน";
 };
 function analyse(recs){
-  const done = recs.filter(r=>r.done);
+  /* รายการที่เป็นแค่การเปลี่ยนรหัสกอง (สับเปลี่ยนเข้ากองเดิม หน่วยเท่าเดิม) ไม่นับเป็นการซื้อขาย */
+  const done = recs.filter(r=>r.done && !r.rename);
   const funds = new Map();
   const F = name => {
     if(!funds.has(name)) funds.set(name,{name,buy:0,sell:0,pl:0,units:0,cost:0,n:0,first:null,last:null,lastNav:0,lastNavDate:null});
@@ -3038,6 +3216,7 @@ function emptyCard(title, msg, btnLabel, onClick){
 }
 function render(a){
   A=a; DAILY=null;
+  a.was=aliasSeen(a);
   const P=["#pane2","#pane3","#pane4","#pane5","#pane6","#pane7","#pane8","#pane9"].map($);
   P.forEach(p=>p.innerHTML="");
   mountFreeTabs();
@@ -4250,7 +4429,7 @@ function cardHoldings(a){
     const last = hp && hp.pts.length ? hp.pts[hp.pts.length-1] : null;
     const nav = (p && p.nav>0) ? p.nav : (last ? last.nav : (f.navNow||0));
     const q=el("tr"); q.dataset.i=i;
-    q.innerHTML=`<td class="l"><strong>${esc(f.name)}</strong></td>
+    q.innerHTML=`<td class="l"><strong>${esc(f.name)}</strong>${wasHtml(f.name)}</td>
       <td class="l" style="color:var(--muted);font-size:12.5px">${esc(p?p.amc:"")||"–"}</td>
       <td class="num">${fmt(f.units,4)}</td>
       <td class="num">${fmt(f.cost)}</td>
@@ -4497,7 +4676,7 @@ function cardFunds(a){
     const multi=eps.length>1;
     const key=fundKey(f.name);
     const tr=el("tr");
-    tr.innerHTML=`<td class="l"><strong>${esc(f.name)}</strong>${multi
+    tr.innerHTML=`<td class="l"><strong>${esc(f.name)}</strong>${held?"":wasHtml(f.name)}${multi
         ? ` <button class="epi-btn no-print" type="button" data-k="${esc(key)}" aria-expanded="false" title="แยกตามช่วงที่ถือ">${fmt0(eps.length)} ช่วง ▾</button>` : ""}</td>
       <td class="num">${fmt(f.buy)}</td><td class="num">${fmt(f.sell)}</td>
       <td class="num ${cls(f.pl)}">${sign(f.pl)}</td>
@@ -4572,7 +4751,8 @@ function fillTx(){
   const ty=$("#txT").value, yr=$("#txY").value;
   const TH={buy:"ซื้อ",sell:"ขาย",switch:"สับเปลี่ยน"};
   const rows=A.recs.filter(r=>
-    (!q || r.fund.toLowerCase().includes(q) || (r.dest||"").toLowerCase().includes(q)) &&
+    (!q || r.fund.toLowerCase().includes(q) || (r.dest||"").toLowerCase().includes(q)
+        || String(r.fund0||"").toLowerCase().includes(q) || String(r.dest0||"").toLowerCase().includes(q)) &&
     (!ty || r.type===ty) && (!yr || r.date.getFullYear()===+yr));
   const tb=$("#txTable tbody"); tb.innerHTML="";
   const frag=document.createDocumentFragment();
@@ -4581,7 +4761,7 @@ function fillTx(){
     const tr=el("tr");
     tr.innerHTML=`<td class="l num">${thDate(r.date)}</td>
       <td class="c">${TH[r.type]||esc(r.type)}</td>
-      <td class="l">${esc(r.fund)}${isPromo(r)?`<span class="promo sm">โปรโมชัน</span>`:""}</td><td class="l">${esc(r.dest||"")}</td>
+      <td class="l">${esc(r.fund)}${r.fund0&&r.fund0!==r.fund?` <span class="was">(เดิม: ${esc(r.fund0)})</span>`:""}${isPromo(r)?`<span class="promo sm">โปรโมชัน</span>`:""}${r.rename?` <span class="was">· เปลี่ยนรหัส ไม่นับเป็นซื้อขาย</span>`:""}</td><td class="l">${esc(r.dest||"")}${r.dest0&&r.dest0!==r.dest?` <span class="was">(เดิม: ${esc(r.dest0)})</span>`:""}</td>
       <td class="num">${fmt(r.amount)}</td>
       <td class="num">${r.units?fmt(r.units,4):"–"}</td>
       <td class="num">${nav?fmt(nav,4):"–"}</td>
@@ -4828,7 +5008,7 @@ function showErr(msg,ok){
 }
 function run(text,label){
   try{
-    const recs=parseStatement(text);
+    const recs=aliasRecs(parseStatement(text));
     lastText=text;
     render(analyse(recs));
     {
@@ -4843,7 +5023,9 @@ function run(text,label){
       renderDataWarn();
     }
     if(cfgVal("navGid",SHEET_DEF.navGid)) pullNavSheet(null,true);
-    showErr(`อ่านได้ ${fmt0(recs.length)} รายการ${label?" จาก "+label:""} — สำเร็จ ${fmt0(A.done.length)} รายการ · เปิดแท็บที่ 2 เพื่อดูรายงาน`,true);
+    const nAlias=A.was?A.was.size:0;
+    showErr(`อ่านได้ ${fmt0(recs.length)} รายการ${label?" จาก "+label:""} — สำเร็จ ${fmt0(A.done.length)} รายการ · เปิดแท็บที่ 2 เพื่อดูรายงาน`
+      +(nAlias?` · พบกองที่เปลี่ยนรหัส ${fmt0(nAlias)} กอง รวมเป็นกองเดียวให้แล้ว (ดูรายการด้านบนของแท็บที่ 2)`:""),true);
     showTab(1);
   }catch(e){
     showErr(e.message||String(e));
@@ -4955,11 +5137,29 @@ function showPErr(msg,ok){
   const box=$("#pErr"); if(!box) return; box.innerHTML="";
   if(msg) box.appendChild(el("div","msg"+(ok?" ok":""),msg));
 }
+/* ไฟล์พอร์ตอาจมีทั้งรหัสเก่าและรหัสใหม่ของกองเดียวกัน — รวมเป็นแถวเดียวด้วยรหัสหลัก
+   NAV และวันที่ NAV ยึดแถวของรหัสใหม่ */
+function portMap(list){
+  const map=new Map();
+  list.forEach(o0=>{
+    const raw=o0.fund0||o0.fund;
+    const o={...o0, fund0:raw, fund:canonName(raw)};
+    o.key=fundKey(o.fund);
+    o.raw=fundKey(raw)!==o.key ? [raw] : [];
+    const p=map.get(o.key);
+    if(!p){ map.set(o.key,o); return; }
+    p.units+=o.units; p.cost+=o.cost; p.value+=o.value; p.pl+=o.pl;
+    if(!o.raw.length || !(p.nav>0)){ if(o.nav>0) p.nav=o.nav; if(o.asOf) p.asOf=o.asOf; if(o.amc) p.amc=o.amc; }
+    if(p.units>0 && p.cost>0) p.navCost=p.cost/p.units;
+    o.raw.forEach(x=>{ if(p.raw.indexOf(x)<0) p.raw.push(x); });
+  });
+  return map;
+}
 function runPortfolio(text,label){
   try{
     const list=parsePortfolio(text);
-    PORT.map=new Map(list.map(o=>[o.key,o])); PORT.text=text;
-    const dated=list.filter(o=>o.asOf)[0];
+    PORT.map=portMap(list); PORT.text=text;
+    const dated=[...PORT.map.values()].filter(o=>o.asOf)[0];
     const head=`อ่านพอร์ตได้ ${fmt0(list.length)} กอง${label?" จาก "+label:""}${dated?` · NAV ณ ${dated.asOf}`:""}`;
     if(A && !A.portfolioOnly){
       showPErr(head+" — อัปเดตแท็บที่ 4 แล้ว",true);
@@ -5021,7 +5221,7 @@ $("#saveFile").addEventListener("click",()=>{
     navs[A.holdings[+tr.dataset.i].name]=parseFloat(tr.querySelector("input.nav").value)||0;
   });
   const blob=JSON.stringify({v:4,saved:new Date().toISOString(),meta:meta(),navs,statement:lastText,portfolio:PORT.text,navHistory:NAVH.text, extra:EXTRA.text,
-    sheet:{url:($("#sheetUrl")||{}).value||"", fdGid:($("#fdGid")||{}).value||"", vwGid:($("#vwGid")||{}).value||"", navGid:($("#navGid")||{}).value||"", aimcTab:($("#aimcTab")||{}).value||"", pallocTab:($("#pallocTab")||{}).value||"", pretTab:($("#pretTab")||{}).value||"", ftagTab:($("#ftagTab")||{}).value||"", fmapTab:($("#fmapTab")||{}).value||"", callTab:($("#callTab")||{}).value||"", fpickTab:($("#fpickTab")||{}).value||"", mirrorTab:($("#mirrorTab")||{}).value||"", newsTab:($("#newsTab")||{}).value||"", fvNewsCol:($("#fvNewsCol")||{}).value||"", fvThemeCol:($("#fvThemeCol")||{}).value||"", mirKeyCol:($("#mirKeyCol")||{}).value||"", mirShowCol:($("#mirShowCol")||{}).value||"", mirSumCol:($("#mirSumCol")||{}).value||""},
+    sheet:{url:($("#sheetUrl")||{}).value||"", fdGid:($("#fdGid")||{}).value||"", vwGid:($("#vwGid")||{}).value||"", navGid:($("#navGid")||{}).value||"", aliasTab:($("#aliasTab")||{}).value||"", aimcTab:($("#aimcTab")||{}).value||"", pallocTab:($("#pallocTab")||{}).value||"", pretTab:($("#pretTab")||{}).value||"", ftagTab:($("#ftagTab")||{}).value||"", fmapTab:($("#fmapTab")||{}).value||"", callTab:($("#callTab")||{}).value||"", fpickTab:($("#fpickTab")||{}).value||"", mirrorTab:($("#mirrorTab")||{}).value||"", newsTab:($("#newsTab")||{}).value||"", fvNewsCol:($("#fvNewsCol")||{}).value||"", fvThemeCol:($("#fvThemeCol")||{}).value||"", mirKeyCol:($("#mirKeyCol")||{}).value||"", mirShowCol:($("#mirShowCol")||{}).value||"", mirSumCol:($("#mirSumCol")||{}).value||""},
     cls:[...CLS.entries()], note:[...NOTE.entries()], action:[...ACTION.entries()], target:[...REBAL_TARGET.entries()], overview:OVERVIEW, fixed:[...FIXED.entries()], newsOff:[...NEWSOFF], newsPick:[...NEWSPICK.entries()]});
   const name=(meta().client||"portfolio").replace(/[^\w\u0E00-\u0E7F.-]+/g,"-");
   toast(download(name+"-report.json",blob,"application/json") ? "บันทึกไฟล์ข้อมูลแล้ว" : "บันทึกไม่สำเร็จ");
@@ -5048,12 +5248,13 @@ $("#loadFile").addEventListener("change",e=>{
                    if($("#fdGid")) $("#fdGid").value=o.sheet.fdGid||SHEET_DEF.fdGid;
                    if($("#vwGid")) $("#vwGid").value=o.sheet.vwGid||SHEET_DEF.vwGid;
                    if($("#navGid")) $("#navGid").value=o.sheet.navGid||SHEET_DEF.navGid;
-                   ["aimcTab","ftagTab","fmapTab","pallocTab","pretTab","callTab","fpickTab","mirrorTab","newsTab"].forEach(k=>{ if($("#"+k)) $("#"+k).value=o.sheet[k]||SHEET_DEF[k]; });
+                   ["aimcTab","ftagTab","fmapTab","pallocTab","pretTab","callTab","fpickTab","mirrorTab","newsTab","aliasTab"].forEach(k=>{ if($("#"+k)) $("#"+k).value=o.sheet[k]||SHEET_DEF[k]; });
                    [["fvNewsCol","F"],["fvThemeCol","C"],["mirKeyCol","B"],["mirShowCol","G"],["mirSumCol","C"]].forEach(([k,dv])=>{ if($("#"+k)) $("#"+k).value=o.sheet[k]||dv; }); }
       if(o.extra){ try{ EXTRA.rows=parseExtra(o.extra); EXTRA.text=o.extra; }catch(e){} }
       CLS=new Map(o.cls||[]); NOTE=new Map(o.note||[]); ACTION=new Map(o.action||[]);
       REBAL_TARGET=new Map(o.target||[]); OVERVIEW=o.overview||""; FIXED=new Map(o.fixed||[]);
       NEWSOFF=new Set(o.newsOff||[]); NEWSPICK=new Map(o.newsPick||[]);
+      aliasRekeyState();           /* ไฟล์เก่าอาจบันทึกค่าไว้กับรหัสเก่า */
       $("#paste").value=o.statement;
       run(o.statement,"ไฟล์ที่บันทึกไว้");
       if(o.navs && A){
@@ -5633,11 +5834,13 @@ function newsFor(name, opt){
     if(seen.has(t)){ Object.assign(seen.get(t), flags); return; }
     seen.set(t, {...r, ...flags});
   };
-  (NEWS.get(k)||[]).forEach(r=>add(r,{top:true}));
-  (MIRROR_BY_FUND.get(k)||[]).forEach(r=>add(r,{}));
+  /* กองที่เปลี่ยนรหัส: รวมข่าวที่ผูกไว้กับรหัสเก่าด้วย */
+  const ks=aliasKeys(name);
+  ks.forEach(x=>(NEWS.get(x)||[]).forEach(r=>add(r,{top:true})));
+  ks.forEach(x=>(MIRROR_BY_FUND.get(x)||[]).forEach(r=>add(r,{})));
   /* fund_tags ใช้ชุดคำเดียวกับ tags ใน news_mirror จึงจับคู่ได้แม่นกว่า theme ของ fund_view */
   const ft=ftagOf(name);
-  const themeTags = (ft && ft.theme.length) ? ft.theme : splitFunds(FVTHEME.get(k)||"").map(t=>String(t).trim().toUpperCase());
+  const themeTags = (ft && ft.theme.length) ? ft.theme : splitFunds(aliasGet(FVTHEME,name)||"").map(t=>String(t).trim().toUpperCase());
   themeTags.forEach(tag=>{ if(tag) (MIRROR_BY_TAG.get(tag)||[]).forEach(r=>add(r,{tag})); });
   const all=[...seen.values()];
   if(!all.length) return [];
@@ -5676,8 +5879,13 @@ function newsFor(name, opt){
   best.newest=true; best.stale=days; best.more=all.length-1;
   return [best];
 }
-const callsOf = n => CALLS.get(fundKey(n)) || [];
-const fpickOf = n => FPICK.get(fundKey(n)) || null;
+function callsOf(n){
+  const ks=aliasKeys(n);
+  if(ks.length<2) return CALLS.get(ks[0]) || [];
+  /* กองที่เปลี่ยนรหัส: รวม Call ของรหัสเก่าด้วย แล้วเรียงใหม่ก่อนเก่า */
+  return [...new Set(ks.reduce((out,k)=>out.concat(CALLS.get(k)||[]),[]))].sort((a,b)=>dateSort(b.at)-dateSort(a.at));
+}
+const fpickOf = n => aliasGet(FPICK,n) || null;
 const newsOf  = n => newsFor(n);
 /* โลโก้และรูปคอลัมนิสต์ที่ฝังมากับไฟล์ ใช้เมื่อรูปจากชีตโหลดไม่ได้ */
 const IMG_FPICK="data:image/jpeg;base64,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";
@@ -5894,17 +6102,22 @@ let FMAP_BASE=null;
 function fmapOf(name){
   const k=fundKey(name);
   if(FMAP.has(k)) return FMAP.get(k);
+  /* FundMap อาจยังเป็นรหัสเก่า (หรือรหัสใหม่) อยู่ */
+  const ka=aliasGet(FMAP,name); if(ka) return ka;
   if(!FMAP_BASE || FMAP_BASE.size!==FMAP.size){
     FMAP_BASE=new Map();
     FMAP.forEach((v,kk)=>{ const b=projKey(kk); if(!FMAP_BASE.has(b)) FMAP_BASE.set(b,v); });
   }
   return FMAP_BASE.get(projKey(name))||null;
 }
-const ftagOf = n => FTAGS.get(fundKey(n))||null;
+const ftagOf = n => aliasGet(FTAGS,n)||null;
 /* ชื่อไทย — fund_tags ระบุถึงชนิดหน่วย จึงใช้ก่อน แล้วค่อยถอยไป FundMap */
 function thaiName(name){
   const t=ftagOf(name);
   if(t && t.name) return t.name;
+  /* FundMap ยังมีแต่รหัสเก่า ชื่อไทยอาจเป็นชื่อก่อนเปลี่ยน — ใช้ชื่อใน Funddata ของรหัสใหม่ก่อน */
+  const k=aliasKey(fundKey(name));
+  if(ALIAS.olds.has(k) && !FMAP.has(k)){ const fd=FD.get(k); if(fd && fd.nameTh) return fd.nameTh; }
   const f=fmapOf(name);
   return f ? (f.nameTh||"") : "";
 }
@@ -6098,7 +6311,8 @@ const SHEET_DEF = {
   aimcTab: "AIMC_to_Inavi", ftagTab: "fund_tags", fmapTab: "FundMap",
   pallocTab: "port_allocation", pretTab: "portfolio_daily_return",
   callTab: "Investment_Call_status", fpickTab: "F-Pick Data",
-  mirrorTab: "news_mirror", newsTab: "fund_view"
+  mirrorTab: "news_mirror", newsTab: "fund_view",
+  aliasTab: "fund_alias"
 };
 let FD = new Map();          /* fundKey -> {code,cat,nameTh,ter,fee,fact,master} */
 let VW = [];                 /* [{group,ac,gauge,rec,view,action,asOf,prev,chg}] */
@@ -6283,7 +6497,7 @@ const inaviLookup = ac => {
 function classify(name){
   const k=fundKey(name);
   if(CLS.has(k)) return CLS.get(k);
-  const fd=FD.get(k);
+  const fd=aliasGet(FD,name);
   const cat=fd?fd.cat:"";
   /* ตารางแมปจากชีตมาก่อนเสมอ ไม่ต้องเดา */
   if(cat && AIMCMAP.size){
@@ -6367,6 +6581,8 @@ function cardSheetLink(){
       <input class="f" id="mirrorTab" value="${esc(SHEET_DEF.mirrorTab)}"></div>
     <div><label class="f" for="newsTab">แท็บข่าวรายกอง</label>
       <input class="f" id="newsTab" value="${esc(SHEET_DEF.newsTab)}"></div>
+    <div><label class="f" for="aliasTab">แท็บกองเปลี่ยนรหัส (ชื่อแท็บหรือ gid)</label>
+      <input class="f" id="aliasTab" value="${esc(SHEET_DEF.aliasTab)}"></div>
     <div><label class="f" for="fvNewsCol">คอลัมน์ข่าวใน fund_view</label>
       <input class="f" id="fvNewsCol" value="F" style="max-width:90px"></div>
     <div><label class="f" for="fvThemeCol">คอลัมน์ธีมใน fund_view</label>
@@ -6388,8 +6604,47 @@ function cardSheetLink(){
     <button class="btn quiet" id="btnOpenSheet2">เปิดชีต</button>`;
   c.appendChild(st);
   c.appendChild(el("div","","")).id="sheetMsg";
-  c.appendChild(el("p","foot","ชีตต้องแชร์แบบ “ทุกคนที่มีลิงก์ดูได้” · fund_view: อ่านคอลัมน์ที่ระบุเป็นข่าวของกองนั้น แล้วนำไปเทียบกับคอลัมน์คู่เทียบใน news_mirror ถ้าตรงจะแสดงคอลัมน์เพิ่มให้ด้วย · port_allocation ให้สัดส่วนโมเดลพอร์ต และ portfolio_daily_return ให้ผลตอบแทนรายวันของโมเดล (ดึงเฉพาะคอลัมน์ที่เลือกเพื่อไม่ให้ช้า) · AIMC_to_Inavi ใช้จัดประเภทสินทรัพย์แทนการเดาจากชื่อกอง · fund_tags ให้แท็กธีมสำหรับจับคู่ข่าวและสถานะป้องกันค่าเงิน · FundMap ให้ชื่อไทย กองหลัก และสิทธิภาษี · Funddata ใช้ short_code จับคู่ชื่อกอง และ aimc_category_name_en เป็นสินทรัพย์ย่อย · investment_view จับคู่ด้วย Asset Class · Investment Call จับคู่ด้วย fund_list (คั่นด้วยจุลภาคได้) · F-Pick และข่าวรายกองจับคู่ด้วยคอลัมน์ชื่อกองในแท็บนั้น ระบบตรวจหัวคอลัมน์ให้อัตโนมัติ")).style.marginTop="12px";
+  c.appendChild(el("p","foot","ชีตต้องแชร์แบบ “ทุกคนที่มีลิงก์ดูได้” · fund_view: อ่านคอลัมน์ที่ระบุเป็นข่าวของกองนั้น แล้วนำไปเทียบกับคอลัมน์คู่เทียบใน news_mirror ถ้าตรงจะแสดงคอลัมน์เพิ่มให้ด้วย · port_allocation ให้สัดส่วนโมเดลพอร์ต และ portfolio_daily_return ให้ผลตอบแทนรายวันของโมเดล (ดึงเฉพาะคอลัมน์ที่เลือกเพื่อไม่ให้ช้า) · AIMC_to_Inavi ใช้จัดประเภทสินทรัพย์แทนการเดาจากชื่อกอง · fund_tags ให้แท็กธีมสำหรับจับคู่ข่าวและสถานะป้องกันค่าเงิน · FundMap ให้ชื่อไทย กองหลัก และสิทธิภาษี · Funddata ใช้ short_code จับคู่ชื่อกอง และ aimc_category_name_en เป็นสินทรัพย์ย่อย · investment_view จับคู่ด้วย Asset Class · Investment Call จับคู่ด้วย fund_list (คั่นด้วยจุลภาคได้) · F-Pick และข่าวรายกองจับคู่ด้วยคอลัมน์ชื่อกองในแท็บนั้น ระบบตรวจหัวคอลัมน์ให้อัตโนมัติ · fund_alias (old_code → new_code) ใช้รวมกองที่เปลี่ยนรหัสเป็นกองเดียวและต่อ NAV ของรหัสเก่ากับรหัสใหม่ ถ้าไม่มีแท็บนี้จะทำงานแบบเดิม")).style.marginTop="12px";
   return c;
+}
+/* ---------- กองที่เปลี่ยนรหัส ---------- */
+/* โหลดไม่ได้ = ทำงานแบบเดิม (ไม่รวมกอง ไม่ต่อ NAV) แต่ถ้าเคยโหลดสำเร็จแล้วให้ใช้ชุดเดิมต่อ */
+async function pullAlias(url){
+  const tab=cfgVal("aliasTab",SHEET_DEF.aliasTab);
+  const before=ALIAS.sig;
+  try{
+    if(!tab) throw new Error("ยังไม่ได้ตั้งชื่อแท็บ fund_alias");
+    const m = /^\d+$/.test(tab) ? await loadViaGviz(url,tab) : await loadGvizSheet(url,tab);
+    const n=applyAlias(m);
+    return {txt:`กองเปลี่ยนรหัส ${fmt0(n)} คู่`+(ALIAS.bad.length?` (ข้าม ${fmt0(ALIAS.bad.length)} ชุดที่รหัสวนกันเอง)`:""), changed:ALIAS.sig!==before};
+  }catch(e){
+    const why=e.message||String(e);
+    if(ALIAS.state==="ok" && ALIAS.n){ ALIAS.msg="โหลดใหม่ไม่สำเร็จ ใช้ชุดเดิม: "+why; return {txt:"fund_alias: "+ALIAS.msg, changed:false}; }
+    ALIAS={...aliasEmpty(), state:"fail", msg:why};
+    STORE.resetCache();
+    return {txt:`fund_alias: ${why} — กองที่เปลี่ยนรหัสจะแยกเป็นคนละกองเหมือนเดิม`, changed:before!==""};
+  }
+}
+/* ย้ายค่าที่ผู้ใช้ตั้งไว้กับรหัสเก่าไปไว้ที่รหัสหลัก (ถ้ารหัสหลักยังไม่มีค่า) */
+function aliasRekey(map){
+  if(!map || !map.size || !ALIAS.n) return;
+  [...map.keys()].forEach(k=>{
+    const c=aliasKey(k);
+    if(c===k) return;
+    if(!map.has(c)) map.set(c,map.get(k));
+    map.delete(k);
+  });
+}
+function aliasRekeyState(){
+  [NOTE,ACTION,FIXED,REBAL_TARGET,NEWSPICK].forEach(aliasRekey);
+  NEWSOFF=new Set([...NEWSOFF].map(aliasKey));
+}
+/* ตารางรหัสเปลี่ยน → แปลงข้อมูลที่โหลดไว้แล้วใหม่ (ยังไม่วาดหน้าจอ) */
+function aliasRefresh(){
+  STORE.resetCache(); FMAP_BASE=null; FUNDNAMES=null;
+  if(PORT.text){ try{ PORT.map=portMap(parsePortfolio(PORT.text)); }catch(e){} }
+  aliasRekeyState();
+  if(A) A = A.portfolioOnly ? (analysePortfolioOnly()||A) : analyse(aliasRecs(A.recs));
 }
 async function pullSheet(which){
   const url=cfgVal("sheetUrl",SHEET_DEF.url), fdGid=cfgVal("fdGid",SHEET_DEF.fdGid), vwGid=cfgVal("vwGid",SHEET_DEF.vwGid);
@@ -6398,7 +6653,14 @@ async function pullSheet(which){
   if(!url){ say("ยังไม่ได้ใส่ลิงก์ชีต"); return; }
   say("กำลังดึงข้อมูลจากชีต …",true);
   const done=[];
+  let aliasDirty=false;
   try{
+    /* โหลดก่อนแท็บอื่น เพราะทุกแท็บต้องจับคู่ด้วยรหัสหลัก */
+    if(which==="all" || ALIAS.state!=="ok"){
+      const al=await pullAlias(url);
+      done.push(al.txt);
+      if(al.changed){ aliasRefresh(); aliasDirty=true; }
+    }
     if(which!=="vw"){ const n=applyFunddata(await loadViaGviz(url,fdGid)); done.push(`ประเภทสินทรัพย์ ${fmt0(n)} กอง`); resetClassify(); }
     if(which!=="fd"){ const n=applyViews(await loadViaGviz(url,vwGid)); done.push(`มุมมอง ${fmt0(n)} กลุ่มสินทรัพย์`); }
     if(which==="all"||which==="xt"){
@@ -6422,7 +6684,9 @@ async function pullSheet(which){
     say("ดึงสำเร็จ — "+done.join(" · ")+` · ${new Date().toLocaleString("th-TH")}`,true);
     rbFeedRef(true);          /* ต้องป้อนก่อน เพราะ render จะทำงานเฉพาะเมื่อมีพอร์ต */
     if(A) render(A);
-  }catch(e){ say("ดึงไม่สำเร็จ: "+(e.message||e)); }
+    /* รวมกองแล้วต้องดึง NAV ของรหัสเก่ามาต่อด้วย */
+    if(aliasDirty && A && cfgVal("navGid",SHEET_DEF.navGid)) pullNavSheet(null,true);
+  }catch(e){ say("ดึงไม่สำเร็จ: "+(e.message||e)); if(aliasDirty && A) render(A); }
 }
 
 /* ---------- ซิงก์ NAV ล่าสุดจากชีต (แท็บ nav_packed ที่ Apps Script เขียนไว้) ---------- */
@@ -6430,7 +6694,56 @@ let DATAWARN="";
 function renderDataWarn(){
   const box=$("#pane2"); if(!box) return;
   const old=box.querySelector(".warnbox"); if(old) old.remove();
-  if(DATAWARN) box.insertAdjacentHTML("afterbegin",`<div class="warnbox no-print">${DATAWARN}</div>`);
+  const h=aliasCheckHTML()+DATAWARN;
+  if(h) box.insertAdjacentHTML("afterbegin",`<div class="warnbox no-print">${h}</div>`);
+}
+/* หน้าตรวจข้อมูล: กองที่เปลี่ยนรหัสที่พบในไฟล์นี้ + ช่วงต่อ NAV ที่ต้องตรวจ */
+function aliasCheckHTML(){
+  if(!A) return "";
+  const out=[];
+  if(ALIAS.state==="fail")
+    out.push(`<div class="msg info" style="margin-bottom:12px">ยังโหลดแท็บ fund_alias ไม่ได้ (${esc(ALIAS.msg)}) — ระบบทำงานแบบเดิม กองที่เปลี่ยนรหัสจะแยกเป็นคนละกอง</div>`);
+  /* รหัสในไฟล์ที่อยู่ในชุดที่วนกันเอง ระบบไม่รวมให้ */
+  const inFile=new Set();
+  (A.recs||[]).forEach(r=>{ inFile.add(fundKey(r.fund0||r.fund)); if(r.dest0||r.dest) inFile.add(fundKey(r.dest0||r.dest)); });
+  if(PORT.map) PORT.map.forEach(p=>{ inFile.add(p.key); (p.raw||[]).forEach(x=>inFile.add(fundKey(x))); });
+  const loops=ALIAS.bad.filter(b=>b.codes.some(c=>inFile.has(fundKey(c))));
+  const was=A.was||new Map();
+  if(!was.size && !loops.length) return out.join("");
+  const li=[];
+  let bad=0;
+  was.forEach((olds,k)=>{
+    const f=[...A.funds.values()].find(x=>fundKey(x.name)===k) || (PORT.map&&PORT.map.get(k)&&{name:PORT.map.get(k).fund});
+    const name=f?f.name:k;
+    const nOld=(A.recs||[]).filter(r=>olds.indexOf(r.fund0)>=0 || olds.indexOf(r.dest0)>=0).length;
+    const nAll=(A.recs||[]).filter(r=>fundKey(r.fund)===k || fundKey(r.dest||"")===k).length;
+    const nRen=(A.recs||[]).filter(r=>r.rename && fundKey(r.fund)===k).length;
+    const o=NAVH.map ? NAVH.map.get(k) : null;
+    const notes=[];
+    if(o && o.joins) o.joins.forEach(j=>{
+      if(!j.last){ notes.push(`<span class="xdim">NAV ของ ${esc(j.from)} เริ่มหลังรหัสใหม่ จึงใช้ของ ${esc(j.to)} ทั้งหมด</span>`); return; }
+      const txt=`NAV ${esc(j.from)} ถึง ${thDate(j.last.d)} (${fmt(j.last.nav,4)}) → ${esc(j.to)} เริ่ม ${thDate(j.first.d)} (${fmt(j.first.nav,4)}) · ต่างกัน ${j.jump>=0?"+":""}${pct(j.jump)}`;
+      if(j.flag==="jump"){ bad++; notes.push(`<span class="loss"><strong>ช่วงต่อ NAV กระโดดผิดปกติ</strong> — ${txt} เกินเกณฑ์ ±${pct(j.lim)} · ระบบไม่ได้ปรับตัวเลขให้ ตรวจกับ บลจ. ก่อนออกรายงาน</span>`); }
+      else if(j.flag==="overlap"){ bad++; notes.push(`<span class="loss"><strong>NAV สองรหัสวันเดียวกันไม่ตรงกัน</strong> (ต่างสูงสุด ${pct(j.diff)}) — อาจไม่ใช่กองเดียวกัน ตรวจกับ บลจ. · ${txt}</span>`); }
+      else if(j.flag==="gap") notes.push(`${txt} · <span class="loss">ช่วงต่อห่างกัน ${fmt0(j.gap)} วัน มูลค่าช่วงนั้นใช้ NAV ล่าสุดก่อนหน้า</span>`);
+      else notes.push(`<span class="xdim">${txt} · ต่อกันปกติ</span>`);
+    });
+    if(o && o.own===false){
+      const last=o.pts[o.pts.length-1];
+      notes.push(`<span class="loss">ยังไม่มี NAV ของรหัสใหม่ — ใช้ NAV ล่าสุดของรหัสเก่า ${thDate(last.d)} (${fmt(last.nav,4)}) · กดดึง NAV ล่าสุดจากชีต หรือแก้ NAV ในแท็บที่ 4</span>`);
+      bad++;
+    }
+    li.push(`<li><strong>${olds.map(esc).join(", ")} → ${esc(name)}</strong>
+      <span class="xdim"> · ${fmt0(nAll)} รายการ (ใช้รหัสเก่า ${fmt0(nOld)})${nRen?` · รายการเปลี่ยนรหัส ${fmt0(nRen)} รายการไม่นับเป็นซื้อขาย`:""}</span>
+      ${notes.length?`<div style="margin-top:2px">${notes.join("<br>")}</div>`:""}</li>`);
+  });
+  loops.forEach(b=>{ bad++;
+    li.push(`<li><span class="loss"><strong>${b.codes.map(esc).join(" ↔ ")}</strong> — ${esc(b.why)} ในแท็บ fund_alias ระบบไม่รวมให้ (คิดแยกตามรหัสในไฟล์) · แจ้งคนดูแลชีตให้แก้</span></li>`); });
+  out.push(`<div class="msg info" style="margin-bottom:12px"><strong>กองที่เปลี่ยนรหัส: เก่า → ใหม่</strong>
+    <span class="xdim">· รวมรายการซื้อขายเป็นกองเดียว ใช้ชื่อ หมวด มุมมอง และข้อมูลกองของรหัสใหม่ · NAV ก่อนวันเปลี่ยนใช้ของรหัสเก่า</span>
+    <ul class="alias-list">${li.join("")}</ul>
+    ${bad?`<div class="loss" style="margin-top:4px"><strong>มี ${fmt0(bad)} จุดที่ต้องตรวจก่อนออกรายงาน</strong></div>`:""}</div>`);
+  return out.join("");
 }
 let NAVSHEET_AT="", NAVSHEET_N=0, NAVSYNC={state:"idle", msg:"", at:null, funds:0, miss:0};
 function navWantList(){
@@ -6492,14 +6805,18 @@ async function pullNavSheet(names, quiet){
     NAVSYNC={state:"loading", msg:"กำลังดึง NAV ล่าสุด …", at:null, funds:0, miss:0}; renderNavCover();
     say("กำลังดึง NAV ล่าสุดจากชีต …",true);
     const idx=await navSheetIndex(url,gid,!!names);
-    /* จับคู่ชื่อที่ต้องการกับชื่อจริงในชีต */
+    /* จับคู่ชื่อที่ต้องการกับชื่อจริงในชีต — กองที่เปลี่ยนรหัสต้องดึงของรหัสเก่ามาต่อด้วย */
     const exact=[], missing=[];
     const seen=new Set();
     want.forEach(n=>{
-      const k=fundKey(n);
-      const real=idx.get(k);
-      if(real && !seen.has(real)){ exact.push(real); seen.add(real); }
-      else if(!real) missing.push(n);
+      let hit=false;
+      aliasKeys(n).forEach(k=>{
+        const real=idx.get(k);
+        if(!real) return;
+        hit=true;
+        if(!seen.has(real)){ exact.push(real); seen.add(real); }
+      });
+      if(!hit) missing.push(n);
     });
     if(!exact.length){
       say(`ไม่พบกองที่ใช้อยู่ในแท็บ nav_packed เลย (ชีตมี ${fmt0(idx.size)} กอง) — ตรวจ gid หรือรัน syncNow ใน Apps Script`,false);
@@ -6715,11 +7032,11 @@ function renderViews(){
     const tr=el("tr"); tr.dataset.k=k;
     const subs=mainOf(cl.main).subs;
     const fpk=fpickOf(f.name), cls0=callsOf(f.name);
-    tr.innerHTML=`<td class="l"><strong>${esc(f.name)}</strong>
+    tr.innerHTML=`<td class="l"><strong>${esc(f.name)}</strong>${wasHtml(f.name)}
       ${fpk?" "+fpickBadge("sm"):""}${fundBadges(f.name,true)}
       ${cls0.length?` <span class="xorder sm" style="background:${orderColor(cls0[0].order)}1F;color:${orderColor(cls0[0].order)}" title="${esc(cls0[0].type)} · ${esc(shortDate(cls0[0].at))}">${esc(cls0[0].order||"CALL")}</span>`:""}
       ${(()=>{const t=thaiName(f.name); return t?`<div class="xthsm">${esc(t)}</div>`:"";})()}
-      ${FD.get(k)?`<div style="font-size:11px;color:var(--muted-2)">${esc(FD.get(k).cat)}</div>`:""}</td>
+      ${aliasGet(FD,f.name)?`<div style="font-size:11px;color:var(--muted-2)">${esc(aliasGet(FD,f.name).cat)}</div>`:""}</td>
       <td class="l"><select class="f cls-main" style="padding:5px 8px;font-size:12.5px">${MAIN_NAMES.map(n=>`<option${n===cl.main?" selected":""}>${esc(n)}</option>`).join("")}</select></td>
       <td class="l"><select class="f cls-sub" style="padding:5px 8px;font-size:12.5px"><option value=""></option>${subs.map(n=>`<option${n===cl.sub?" selected":""}>${esc(n)}</option>`).join("")}</select></td>
       <td class="l"><select class="f cls-ac" style="padding:5px 8px;font-size:12.5px"><option value="">— ไม่ระบุ —</option>${
@@ -6913,7 +7230,9 @@ function rbBuildRef(){
   PALLOC.forEach(p=>models.push({
     n: planShort(p.name),
     m: p.by || "อื่น ๆ",
-    i: p.funds.map(f=>[f.code, +f.w||0]),
+    i: (()=>{ const w=new Map();            /* โมเดลอาจยังใช้รหัสเก่า → แปลงเป็นรหัสหลักให้ตรงกับพอร์ต */
+      p.funds.forEach(f=>{ const c=canonName(f.code); w.set(c,(w.get(c)||0)+(+f.w||0)); });
+      return [...w.entries()]; })(),
     d: p.asOf || ""
   }));
   const funds=[];
@@ -7393,7 +7712,7 @@ function fixedRow(k){
   return FIXED.get(k);
 }
 function feeOf(name){
-  const fd=FD.get(fundKey(name));
+  const fd=aliasGet(FD,name);
   if(!fd) return null;
   const v=parseFloat(String(fd.fee||"").replace(/[^0-9.]/g,""));
   return isFinite(v)? v : null;
@@ -7552,7 +7871,7 @@ function renderFixed(){
     const amt = r.amount==null ? (showRec? x.v : null) : r.amount;
     const fee = r.fee==null ? (showRec? feeOf(r.rec) : null) : r.fee;
     return `<tr data-k="${esc(k)}">
-      <td class="l"><strong>${esc(x.f.name)}</strong>${fundBadges(x.f.name,true)}</td>
+      <td class="l"><strong>${esc(x.f.name)}</strong>${wasHtml(x.f.name)}${fundBadges(x.f.name,true)}</td>
       <td class="num">${fmt(x.v)}</td>
       <td class="num">${pct(x.v/tot)}</td>
       <td class="num ${gp==null?"":cls(gp)}">${gp==null?"–":(gp>=0?"+":"")+pct(gp)}
@@ -7805,6 +8124,7 @@ function renderReport(){
 
   /* รายกอง */
   const hasNav = !!NAVH.map;
+  const seenWas=new Set();       /* "(เดิม: รหัสเก่า)" แสดงเฉพาะครั้งแรกที่กองปรากฏ */
   let frows="";
   groups.forEach(g=>{
     const NC = hasNav ? 12 : 6;
@@ -7817,7 +8137,7 @@ function renderReport(){
       let rets="";
       if(hasNav) FPERIODS.forEach(p=>{ const r=x.f._cash?null:fundReturn(x.f.name,p); rets+=`<td class="num ${r==null?"":cls(r)}">${r==null?"–":pct(r)}</td>`; });
       frows+=`<tr>
-        <td class="l"><strong>${esc(x.f.name)}</strong><div style="font-size:11px;color:var(--muted-2)">${esc(cl.sub||"")}${cl.ac?" · "+esc(cl.ac):""}</div></td>
+        <td class="l"><strong>${esc(x.f.name)}</strong>${wasHtml(x.f.name,seenWas)}<div style="font-size:11px;color:var(--muted-2)">${esc(cl.sub||"")}${cl.ac?" · "+esc(cl.ac):""}</div></td>
         <td class="num">${fmt(x.v)}</td><td class="num">${pct(x.v/total)}</td>
         <td class="num ${cls(pl)}">${sign(pl)}</td>
         <td class="num ${cls(pl)}">${x.f.cost>0?pct(pl/x.f.cost):"–"}</td>
