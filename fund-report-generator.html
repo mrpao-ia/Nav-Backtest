@@ -8193,6 +8193,38 @@ mountFreeTabs();
 $("#pane1").appendChild(disclaimerCard());
 mountFootnotes();
 initApiMode();
+
+/* ============ รับข้อมูลจากแอป Boo (เดสก์ท็อป) ============
+   Boo เรียก window.aopImport({section, fileName, text | base64, fields}) แทนการวางตารางเอง
+   ข้างในใช้ช่องวางและตัวอ่านเดิมทุกตัว ผลจึงเท่ากับวางเองแล้วกด "อ่านข้อมูลที่วาง" ทุกตัวเลข
+   section: statement (รายการย้อนหลัง) · portfolio (พอร์ตปัจจุบัน) · extra (เงินฝาก-ถอน) */
+window.aopImport=function(o){
+  o=o||{};
+  let text=String(o.text||"");
+  if(!text && o.base64){
+    const b=Uint8Array.from(atob(String(o.base64)),c=>c.charCodeAt(0));
+    text=new TextDecoder("utf-8").decode(b);
+  }
+  text=text.replace(/^﻿/,"").trim();
+  const f=o.fields||{}, label=String(o.fileName||"").trim()||"Boo";
+  [["mClient","client"],["mAdvisor","advisor"],["mAsOf","asOf"],["mBrand","brand"]].forEach(([id,k])=>{
+    const n=$("#"+id), v=f[k]==null?"":String(f[k]).trim();
+    if(!n || !v) return;
+    n.value=v; n.dispatchEvent(new Event("input",{bubbles:true}));
+  });
+  const say=id=>{ const b=$("#"+id); return b ? b.textContent.trim() : ""; };
+  if(!text) return {ok:false, msg:"ไม่มีข้อมูลให้อ่าน"};
+  if(o.section==="portfolio"){
+    $("#pPaste").value=text; runPortfolio(text,label);
+    return {ok:!!(PORT.map&&PORT.map.size&&PORT.text===text), msg:say("pErr")};
+  }
+  if(o.section==="extra"){
+    $("#xPaste").value=text; runExtra(text,label); drawExtra();
+    return {ok:EXTRA.text===text, msg:say("xErr")};
+  }
+  $("#paste").value=text; run(text,label);
+  return {ok:!!A && lastText===text, msg:say("err")};
+};
 </script>
 </body>
 </html>
